@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FTC AutoScout</title>
+<meta name="description" content="FTC AutoScout: match predictions, scouting notes and alliance selection for FIRST Tech Challenge. Runs in your browser.">
+<meta name="theme-color" content="#5d081f">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AutoScout">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="iconbtn menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="#/overview" aria-label="FTC AutoScout home">
+    <img src="assets/logo-56.png" alt="" width="34" height="34">
+    <span class="wordmark"><span class="ftc">FTC</span> AutoScout</span>
+  </a>
+  <div class="eventpill" id="eventPill" hidden></div>
+  <div class="topactions">
+    <button class="btn ghost light" id="switchBtn" title="Quick switch (Ctrl+K)"><span aria-hidden="true">⌕</span><span class="hide-sm"> Quick switch</span></button>
+    <button class="btn light" id="saveBtn">Save<span class="hide-sm"> session</span></button>
+  </div>
+</header>
+<nav class="nav" id="nav" aria-label="Pages"></nav>
+<div class="scrim" id="scrim" hidden></div>
+<main id="main">
+  <div class="splash" id="splash">
+    <img src="assets/logo-56.png" alt="" width="56" height="56">
+    <h1>FTC AutoScout</h1>
+    <p id="splashText">Starting…</p>
+    <div class="bar"><div class="bar-fill indeterminate"></div></div>
+    <p class="muted small">The first visit downloads the AutoScout engine (about 7 MB). After that it opens from this device, even offline.</p>
+  </div>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
