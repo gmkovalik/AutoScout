@@ -2,7 +2,7 @@
 
 AutoScout 4.1.0 as a website. It runs on a Mac, a Windows PC, an iPhone or an Android phone, in the browser, with nothing to install.
 
-It is not a rewrite. The website runs the desktop file `AutoScout.py`, unchanged, inside the browser, using Pyodide (Python compiled to WebAssembly). Every number, table column, chart and piece of wording comes from that file. To update the website to a new AutoScout version, replace `AutoScout.py` and publish again.
+It is not a rewrite. The website runs the desktop file `AutoScout.py`, unchanged, inside the browser, using Pyodide (Python compiled to WebAssembly). Every number, table column, chart and piece of wording comes from that file. To update the website to a new AutoScout version, replace `AutoScout.py` and publish again. 
 
 ## Publish it on GitHub Pages (about 5 minutes)
 
