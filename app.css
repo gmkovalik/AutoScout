@@ -41,7 +41,7 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
   padding: calc(8px + var(--safe-top)) 16px 8px; background: var(--brand); color: #fff;
 }
 .brand { display: flex; align-items: center; gap: 9px; color: #fff; text-decoration: none; min-width: 0; }
-.brand img { border-radius: 8px; background: #fff; flex: none; }
+.brand img { border-radius: 0; background: transparent; flex: none;}
 .wordmark { font-weight: 900; font-size: 19px; letter-spacing: .2px; white-space: nowrap; }
 .wordmark .ftc { font-weight: 500; opacity: .85; }
 .eventpill {
