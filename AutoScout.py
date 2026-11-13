@@ -11418,7 +11418,7 @@ def cmd_myteam(s: Session, a):
     for x in info["matches"]:
         m = x.prediction.match
         print(f"  {m.label:6s} {x.color:4s} with {x.partner} vs {x.opponents}  Win chance {x.cow:4.0%}  MR {x.rating}  "
-              f"pred {'Win' if x.predicted_win else 'Loss'}  actual {x.actual or '-'}")
+              f"pred. {'Win' if x.predicted_win else 'Loss'}  actual {x.actual or '-'}")
 
 
 def cmd_alliances(s: Session, a):
