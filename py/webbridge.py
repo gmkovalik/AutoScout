@@ -630,6 +630,14 @@ def act_events_search(a):
         path = (f"events/search/{int(season)}?searchText="
                 f"{urllib.parse.quote(query, safe='')}&limit=30")
         rows = client.get_json(path, max_age=3600) or []
+        # FTCScout fuzzy-searches event names; also support exact event-code lookup.
+        if not rows and " " not in query:
+            try:
+                exact = client.get_json(f"events/{int(season)}/{urllib.parse.quote(query.upper(), safe='')}", max_age=3600)
+                if isinstance(exact, dict):
+                    rows = [exact]
+            except A.ApiError:
+                pass
         seen = set()
         results = []
         for row in rows:
