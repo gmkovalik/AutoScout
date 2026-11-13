@@ -21,6 +21,7 @@ import sys
 import time
 import types
 import urllib.error
+import urllib.parse
 
 import tkstub
 
@@ -78,30 +79,6 @@ def _xhr_get(url: str, timeout: float) -> str:
                                          io.BytesIO(body.encode("utf-8")))
         return body
     raise last or urllib.error.URLError("request failed")
-
-
-def _graphql(query: str) -> dict:
-    """Run a small FTCScout GraphQL query from the Pyodide worker."""
-    if js is None:
-        raise RuntimeError("Event search is available in the browser app only.")
-    url = "https://api.ftcscout.org/graphql"
-    req = js.XMLHttpRequest.new()
-    req.open("POST", url, False)
-    req.setRequestHeader("Accept", "application/json")
-    req.setRequestHeader("Content-Type", "application/json")
-    req.send(json.dumps({"query": query}))
-    status = int(req.status or 0)
-    body = str(req.responseText or "")
-    if status < 200 or status >= 300:
-        raise RuntimeError(f"FTCScout returned HTTP {status} while searching events.")
-    try:
-        payload = json.loads(body or "{}")
-    except ValueError as e:
-        raise RuntimeError("FTCScout returned an unreadable event-search response.") from e
-    if payload.get("errors"):
-        message = payload["errors"][0].get("message", "Unknown GraphQL error")
-        raise RuntimeError(f"FTCScout event search failed: {message}")
-    return payload.get("data") or {}
 
 
 def _pause(attempt: int) -> None:
@@ -643,16 +620,16 @@ VIEWS = {"overview": view_overview, "competition": view_competition, "setup": vi
 
 
 def act_events_search(a):
-    """Search FTCScout events for a season and return selectable event codes."""
+    """Search FTCScout REST event-search endpoint."""
     query = str(a.get("query", "")).strip()
     season = A.as_int(str(a.get("season", "")), APP.session.season)
     if len(query) < 2:
         return {"ok": False, "message": "Enter at least two characters to search for a meet."}
-    if js is None:
-        return {"ok": False, "message": "Event search is available in the browser app only."}
-    gql = f"{{ eventsSearch(season: {int(season)}, searchText: {json.dumps(query)}) {{ name code }} }}"
     try:
-        rows = _graphql(gql).get("eventsSearch") or []
+        client = APP.make_client(offline=False)
+        path = (f"events/search/{int(season)}?searchText="
+                f"{urllib.parse.quote(query, safe='')}&limit=30")
+        rows = client.get_json(path, max_age=3600) or []
         seen = set()
         results = []
         for row in rows:
@@ -662,9 +639,13 @@ def act_events_search(a):
             if not code or code in seen:
                 continue
             seen.add(code)
-            results.append({"name": str(row.get("name") or code), "code": code, "season": int(season)})
-        return {"ok": True, "results": results,
-                "message": f"Found {len(results)} matching meet(s)." if results else "No matching meets found for this season."}
+            location = ", ".join(str(row.get(k)).strip() for k in ("city", "stateprov", "country") if row.get(k))
+            dates = " – ".join(str(row.get(k)).strip() for k in ("dateStart", "dateEnd") if row.get(k))
+            meta = " · ".join(x for x in (code, location, dates) if x)
+            results.append({"name": str(row.get("name") or code), "code": code, "season": int(season), "meta": meta})
+        return {"ok": True, "results": results, "message": f"Found {len(results)} matching meet(s)." if results else "No matching meets found for this season."}
+    except A.ApiError as e:
+        return {"ok": False, "message": getattr(e, "user_message", str(e))}
     except Exception as e:
         return {"ok": False, "message": f"Could not search FTCScout: {e}"}
 
