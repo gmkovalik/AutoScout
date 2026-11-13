@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AutoScout 4.1.0 — competition-day workflow and classic AutoScout styling.
+"""AutoScout 4.1.0 - competition-day workflow and classic AutoScout styling.
 Lightsaders Robotics, Copyright 2026
 Standard library only. Run it with any Python 3.11+:
 
@@ -32,20 +32,20 @@ _analysis = config = core = _SelfModule()
 # ==========================================================================
 # autoscout/__init__.py
 # ==========================================================================
-"""AutoScout — FTC match prediction, ported from the AutoScout v1.3 spreadsheets."""
+"""AutoScout - FTC match prediction, ported from the AutoScout v1.3 spreadsheets."""
 __version__ = "4.1.0"   # 2.2.3: per-meet alliance win-rate curve tab; 2.2.2: Alliance Strength (fitted win-rate curve, chart overlay + equation,
-                         #        per-match stat); COW/Alliance.cow now a calibrated Gaussian CDF
+                         #        per-match stat); Chance of Winning / alliance win chance now a calibrated Gaussian CDF
                          #        instead of a point share. 2.2.1: readable selection everywhere.
                          #        2.2: charts (Teams side menu, Charts tab) + editable data inputs
 APP_NAME = "AutoScout"
 
 # --------------------------------------------------------------------------- #
-# Branding — kept in sync with the FTC AutoScout site
+# Branding - kept in sync with the FTC AutoScout site
 # (https://sites.google.com/smca.com/autoscout/home)
 # --------------------------------------------------------------------------- #
 APP_TAGLINE = "Scouting Made Easy"
 APP_TITLE_PREFIX = "FTC"                       # shown upright, before the wordmark
-APP_FULL_TITLE = f"{APP_TITLE_PREFIX} {APP_NAME}"   # "FTC AutoScout" — the marketing wordmark
+APP_FULL_TITLE = f"{APP_TITLE_PREFIX} {APP_NAME}"   # "FTC AutoScout" - the marketing wordmark
 APP_ORG = "LightSaders Robotics"
 APP_ORG_FULL = "Lightsaders Robotics 12928"
 APP_WEBSITE = "https://sites.google.com/smca.com/autoscout/home"
@@ -219,8 +219,8 @@ class TeamStats:
     teleop: float = 0.0       # STAT PAGE!C
     endgame: float = 0.0      # STAT PAGE!D  ("TBP 2" in AutoSheet)
     proj_opr: Optional[float] = None   # PROJ. OPR!row 44 (None = "Insufficient Data")
-    tdc_issue: str = ""       # T.D.C.!K
-    tdc_delta: float = 0.0    # T.D.C.!N  manual "change in stats"
+    tdc_issue: str = ""       # Technical Issues
+    tdc_delta: float = 0.0    # Technical Issues  manual "change in stats"
     focus: str = "performance"  # AutoSheet!O
     opr_history: list[float] = field(default_factory=list)   # chronological event OPRs
     source_event: str = ""    # which event the stats came from
@@ -242,11 +242,11 @@ class TeamStats:
         return (self.avg + self.opr) / 2
 
     @property
-    def tdc_avg(self) -> float:        # T.D.C.!L
+    def tdc_avg(self) -> float:        # Technical Issues
         return tdc_adjusted_avg(self.new_avg, self.auto, self.endgame, self.tdc_issue)
 
     @property
-    def ftc_avg(self) -> float:        # T.D.C.!M = L + N   ("FTC AVG" in AutoSheet)
+    def ftc_avg(self) -> float:        # Technical Issues = L + N   ("Team average" in AutoSheet)
         return self.tdc_avg + self.tdc_delta
 
     @property
@@ -298,7 +298,7 @@ class TeamStats:
 
 
 def tdc_adjusted_avg(new_avg: float, tbp1: float, tbp2: float, issue: str) -> float:
-    """T.D.C.!L — Technical Difficulty Calculator adjustment.
+    """Technical Issues - Technical Difficulty Calculator adjustment.
 
     CAMERA            → AVG − TBP1          (auto is lost)
     INTAKE JAM/OUT-TAKE → TBP1 + TBP2       (teleop scoring is lost)
@@ -449,7 +449,7 @@ class Prediction:
     blue_pts: float
     red_detail: tuple[float, ...] = ()
     blue_detail: tuple[float, ...] = ()
-    red_strength: float = 0.0    # Alliance Strength (%) — this alliance's predicted points run
+    red_strength: float = 0.0    # Alliance Strength (%) - this alliance's predicted points run
     blue_strength: float = 0.0   # through the loaded event's StrengthFit (set by Session.compute)
 
     @property
@@ -462,7 +462,7 @@ class Prediction:
         150-90 alliance's 60-point edge the same as a 20-10 alliance's 10-point edge, and
         ignores that either alliance's actual score is noisy around its prediction. Now a
         calibrated Phi(margin / combined sigma), matching how EpaModel.observe scores its own
-        margin signal: sigma(M) = a*M**b (Taylor's law — the same scoring spread the EPA model
+        margin signal: sigma(M) = a*M**b (Taylor's law - the same scoring spread the EPA model
         already fits), so a big alliance's points need to differ by more before it counts as
         confident, and a small alliance's smaller absolute spread is still weighed correctly."""
         spread = math.hypot(_cow_sigma(self.red_pts), _cow_sigma(self.blue_pts))
@@ -517,7 +517,7 @@ class Prediction:
 
 
 def match_rating(cow: float) -> int:
-    """AutoScout '1'!AA — MR: 3 if >65%, 2 if >45%, else 1."""
+    """AutoScout '1'!AA - MR: 3 if >65%, 2 if >45%, else 1."""
     if cow > 0.65:
         return 3
     if cow > 0.45:
@@ -526,7 +526,7 @@ def match_rating(cow: float) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# EPA — Expected Points Added. AutoScout's own online rating (FTCScout publishes none).
+# EPA - Expected Points Added. AutoScout's own online rating (FTCScout publishes none).
 # --------------------------------------------------------------------------- #
 @dataclass
 class EpaEvent:
@@ -551,7 +551,7 @@ def _phi(x: float) -> float:
 
 def _cow_sigma(m: float, a: float = 2.1482, b: float = 0.6543) -> float:
     """Taylor's-law scoring spread for one alliance's predicted points (statcube's a*M**b,
-    "std" mode — see EpaModel.sigma) — used to turn a predicted margin into a calibrated win
+    "std" mode - see EpaModel.sigma) - used to turn a predicted margin into a calibrated win
     probability for *any* prediction basis (CAP/OPR/EPA), not only the EPA model itself."""
     return a * max(m, 1e-6) ** b
 
@@ -698,8 +698,8 @@ def predict_from_values(matches: Iterable[Match], values: list[tuple[tuple, tupl
 
 def build_epa_history(prior_events: Iterable[EpaEvent], matches: Iterable[Match], current_code: str = "",
                       settings: Optional[Settings] = None) -> list[tuple[str, Match, tuple, tuple]]:
-    """Same walk as `build_epa`, but keeps a row for *every* match along the way — earlier
-    events' matches as well as this event's — instead of only returning values for `matches`.
+    """Same walk as `build_epa`, but keeps a row for *every* match along the way - earlier
+    events' matches as well as this event's - instead of only returning values for `matches`.
 
     Returns (event_code, match, red_values, blue_values) oldest first, each match valued with
     what EPA knew before it was played. This is what powers the "all matches this season" chart:
@@ -796,7 +796,7 @@ def standings(preds: Iterable[Prediction], teams: dict[int, TeamStats],
 
 
 def accuracy(preds: Iterable[Prediction]) -> tuple[int, int]:
-    """AutoScout '1'!A7 — (correct, decided) over matches with a known non-tie result."""
+    """AutoScout '1'!A7 - (correct, decided) over matches with a known non-tie result."""
     correct = decided = 0
     for p in preds:
         c = p.correct
@@ -834,7 +834,7 @@ def my_team_matches(preds: Iterable[Prediction], team: int) -> list[MyMatch]:
 
 
 def old_rp(wins: int, matches: int) -> float:
-    """AutoScout '1'!X6 — "Old RP (out of 2)" = 2 · wins / matches."""
+    """AutoScout '1'!X6 - "Old RP (out of 2)" = 2 · wins / matches."""
     return round(2 * wins / matches, 2) if matches else 0.0
 
 @dataclass
@@ -843,7 +843,7 @@ class Alliance:
 
     Interface rows 5+ are these rows for one team: the partner's CAP, number and
     name, and the "Total Score" the pair would put up (Interface!D5 = my CAP plus
-    theirs). The opponent columns are this port's own — the sheet ranked partners
+    theirs). The opponent columns are this port's own - the sheet ranked partners
     but never asked which alliances could actually beat which.
     """
     teams: tuple[int, ...]
@@ -855,7 +855,7 @@ class Alliance:
     legal: int = 0                      # alliances sharing none of its teams
     closest: tuple[int, ...] = ()       # the strongest of those
     closest_cap_sum: float = 0.0
-    alliance_strength: float = 0.0      # fitted win rate (%) from StrengthFit — smoothed
+    alliance_strength: float = 0.0      # fitted win rate (%) from StrengthFit - smoothed
                                          # version of win_rate*100, set by alliance_report()
 
     @property
@@ -865,7 +865,7 @@ class Alliance:
 
     @property
     def unbeatable(self) -> bool:
-        """Out-scores every alliance it could legally face — "beats any scenario"."""
+        """Out-scores every alliance it could legally face - "beats any scenario"."""
         return self.legal > 0 and self.beats == self.legal
 
     @property
@@ -875,7 +875,7 @@ class Alliance:
     @property
     def cow(self) -> float:
         """Chance of winning against the closest matchup it could actually face. Now
-        Phi(margin / combined sigma) — see Prediction.red_cow — instead of a point share."""
+        Phi(margin / combined sigma) - see Prediction.red_cow - instead of a point share."""
         spread = math.hypot(_cow_sigma(self.cap_sum), _cow_sigma(self.closest_cap_sum))
         return _phi((self.cap_sum - self.closest_cap_sum) / spread) if spread else 0.5
 
@@ -886,7 +886,7 @@ class Alliance:
     def partner_of(self, team: int) -> int:
         return next((n for n in self.teams if n != team), 0)
 
-    def partner_cap(self, team: int) -> float:      # Interface!A — the partner's CAP
+    def partner_cap(self, team: int) -> float:      # Interface!A - the partner's CAP
         return sum(c for n, c in zip(self.teams, self.caps) if n != team)
 
     def partner_name(self, team: int) -> str:       # Interface!C
@@ -895,7 +895,7 @@ class Alliance:
 
 def _norm_ppf(p: float) -> float:
     """Inverse standard normal CDF (probit), Acklam's rational approximation
-    (relative error ~1.15e-9) — used only to fit `StrengthFit`, not for `_phi`."""
+    (relative error ~1.15e-9) - used only to fit `StrengthFit`, not for `_phi`."""
     if p <= 0.0:
         return -8.0
     if p >= 1.0:
@@ -1008,10 +1008,10 @@ def fit_alliance_strength(table: list["Alliance"]) -> Optional[StrengthFit]:
 
 def alliance_table(teams: dict[int, TeamStats],
                    strength: Callable[[TeamStats], float] = lambda t: t.strength) -> list[Alliance]:
-    """Every possible two-team alliance, ranked by rating sum (CAP, OPR or EPA — Settings.rating).
+    """Every possible two-team alliance, ranked by rating sum (CAP, OPR or EPA - Settings.rating).
 
     Alliance strength is CAP(a) + CAP(b) (TED!D/E), so "A beats B" is just the larger
-    sum — and an alliance's opponents are the ones sharing none of its teams, because
+    sum - and an alliance's opponents are the ones sharing none of its teams, because
     a team cannot play both sides. The whole table therefore falls out of one sort:
     everything below a row in the ranking is something it out-scores, less the handful
     that share a team with it. Comparing every pair directly would be O(alliances²)
@@ -1051,7 +1051,7 @@ def _rank_order(table: list[Standing], teams: dict[int, TeamStats],
 
 
 def _seat_bar(caps: dict[int, float], below: list[int]) -> tuple[float, float]:
-    """Sheet1!N:S for one seat — the best CAP still on the board once one, two, three,
+    """Sheet1!N:S for one seat - the best CAP still on the board once one, two, three,
     four and five teams are gone (five overlapping MAXA windows), then their average
     with the largest counted twice (Sheet1!S = average(N:R, max(N:R))). That average
     is the seat's "pick must be above" bar (Sheet1!F1/F2).
@@ -1077,11 +1077,11 @@ class CaptainSeat:
 def captain_seats(table: list[Standing], teams: dict[int, TeamStats], count: int = 6,
                   exclude: int = 0,
                   strength: Callable[[TeamStats], float] = lambda t: t.strength) -> list[CaptainSeat]:
-    """Sheet1!K10:S15 — the six alliance captains and the picks the draft leaves them.
+    """Sheet1!K10:S15 - the six alliance captains and the picks the draft leaves them.
 
     Sheet1!U:Z tried to stop two captains landing on the same team with a chain of IF
     comparisons; that chain is broken in the source (its later rows reach into empty
-    cells), so this ports its evident intent instead — walk the seats in rank order and
+    cells), so this ports its evident intent instead - walk the seats in rank order and
     give each one the best team no earlier seat has taken. `exclude` keeps your own team
     out of everyone else's pick, which is what Sheet1!AA was for.
     """
@@ -1124,7 +1124,7 @@ class AllianceReport:
 
     @property
     def qualifying(self) -> list[Alliance]:
-        """Interface!A52's FILTER — the partners whose CAP clears this seat's bar."""
+        """Interface!A52's FILTER - the partners whose CAP clears this seat's bar."""
         if self.bar is None:
             return list(self.partners)
         return [a for a in self.partners if a.partner_cap(self.my_team) > self.bar]
@@ -5158,7 +5158,7 @@ def load_event(client: FTCScoutClient, season: int, code: str,
         b.matches = matches_from_json(client.event_matches(season, code))
     except NotFound:
         b.matches = []
-        b.warnings.append("No match schedule published yet — paste one in Setup.")
+        b.warnings.append("No match schedule published yet - paste one in Setup.")
     total = len(b.team_numbers)
     event_cache: dict[str, dict] = {b.code: b.info}
     for i, n in enumerate(b.team_numbers):
@@ -5236,7 +5236,7 @@ def fetch_epa_events(client: FTCScoutClient, season: int, current_code: str, cur
             out.append(EpaEvent(code=code, start=start, matches=ms))
     return out, warns
 
-"""Post-mortem of the predictions — a port of AutoScout's `Analysis` and `Sheet18` tabs.
+"""Post-mortem of the predictions - a port of AutoScout's `Analysis` and `Sheet18` tabs.
 
 `Analysis` asks, for every match the app called wrong: by how many points was the CAP
 off, and was it off because the CAP is wrong or because somebody took penalties?
@@ -5256,14 +5256,14 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-# Analysis!N — the sheet spells it "INNACURATE"; fixed here.
+# Analysis!N - the sheet spells it "INNACURATE"; fixed here.
 CAP_INACCURATE = "CAP INACCURATE"
 LIKELY_PENALTY = "LIKELY PENALTY POINTS"
-# Analysis!W — the per-match verdict uses title case in the sheet.
+# Analysis!W - the per-match verdict uses title case in the sheet.
 MATCH_CAP_INACCURATE = "Cap Inaccurate"
 MATCH_LIKELY_PENALTY = "Likely Penalty Points"
 
-#: Analysis!N8 — a team in at most this many wrong matches is a CAP problem, not penalties.
+#: Analysis!N8 - a team in at most this many wrong matches is a CAP problem, not penalties.
 WRONG_APPEARANCE_THRESHOLD = 2
 
 
@@ -5276,7 +5276,7 @@ class WrongMatch:
     """One row of Analysis rows 8+ where the calculated outcome missed."""
     prediction: core.Prediction
     suggestion: str            # Analysis!O / AJ
-    classification: str        # Analysis!W — MATCH_CAP_INACCURATE | MATCH_LIKELY_PENALTY
+    classification: str        # Analysis!W - MATCH_CAP_INACCURATE | MATCH_LIKELY_PENALTY
 
     @property
     def match(self) -> core.Match:
@@ -5289,7 +5289,7 @@ class TeamFlag:
     team: int
     name: str
     wrong_appearances: int     # Analysis!M = COUNTIF(E8:H1000, team)
-    classification: str        # Analysis!N — CAP_INACCURATE | LIKELY_PENALTY
+    classification: str        # Analysis!N - CAP_INACCURATE | LIKELY_PENALTY
     predicted_wins: int
     actual_wins: int
     scheduled: int
@@ -5299,7 +5299,7 @@ class TeamFlag:
 class AnalysisReport:
     accuracy: tuple[int, int]          # AutoScout '1'!A7  (correct, decided)
     margin_accuracy: tuple[int, int]   # Sheet18!P vs the actual winner
-    np_accuracy: tuple[int, int]       # Sheet18!L — prediction vs the non-penalty winner
+    np_accuracy: tuple[int, int]       # Sheet18!L - prediction vs the non-penalty winner
     wrong: list[WrongMatch] = field(default_factory=list)
     team_flags: dict[int, TeamFlag] = field(default_factory=dict)
     summary_lines: list[str] = field(default_factory=list)
@@ -5444,7 +5444,7 @@ def _pct(pair: tuple[int, int]) -> str:
 def _summary(session, rep: AnalysisReport) -> list[str]:
     """A short report a student can paste into their notebook."""
     name = getattr(session, "event_name", "") or getattr(session, "event_code", "") or "this event"
-    lines = [f"Prediction report — {name} ({session.season}/{session.event_code})"]
+    lines = [f"Prediction report - {name} ({session.season}/{session.event_code})"]
     played = sum(1 for p in session.predictions if p.match.played)
     lines.append(f"{len(session.predictions)} matches on the schedule, {played} played.")
     if session.settings.faithful:
@@ -5455,7 +5455,7 @@ def _summary(session, rep: AnalysisReport) -> list[str]:
     lines.append(f"Margin rule (±{session.settings.margin_points:g} pts): {_pct(rep.margin_accuracy)}.")
 
     if not rep.wrong:
-        lines.append("No wrong calls yet — nothing to explain.")
+        lines.append("No wrong calls yet - nothing to explain.")
     else:
         n_cap = sum(1 for w in rep.wrong if w.classification == MATCH_CAP_INACCURATE)
         lines.append(f"{len(rep.wrong)} wrong calls: {n_cap} look like inaccurate {session.settings.basis}s, "
@@ -5466,7 +5466,7 @@ def _summary(session, rep: AnalysisReport) -> list[str]:
             lines.append("Teams to re-scout:")
             for f in top:
                 lines.append(f"   {f.team} {f.name[:24]:24s} in {f.wrong_appearances} wrong "
-                             f"{'match' if f.wrong_appearances == 1 else 'matches'} — {f.classification} "
+                             f"{'match' if f.wrong_appearances == 1 else 'matches'} - {f.classification} "
                              f"(predicted {f.predicted_wins} wins, actual {f.actual_wins} of {f.scheduled})")
 
     if session.my_team:
@@ -5481,7 +5481,7 @@ def _summary(session, rep: AnalysisReport) -> list[str]:
     return lines
 
 
-"""Exports — the sheets' "Printing instructions" tab, minus the printing instructions.
+"""Exports - the sheets' "Printing instructions" tab, minus the printing instructions.
 
 Three outputs, all from the same session:
 
@@ -5493,7 +5493,7 @@ CSV layout: a single file with two labelled sections, because a meet report is o
 artefact and students mail it around as one attachment. Section 1 is `## TEAMS`
 (one row per team, ranked by the chosen rating); section 2 is `## MATCHES` (one row per match).
 Each section has its own header row; a blank line separates them. Spreadsheets
-import this fine — Excel/Sheets simply show the section markers as text rows.
+import this fine - Excel/Sheets simply show the section markers as text rows.
 """
 
 import csv
@@ -5506,16 +5506,16 @@ from typing import Optional
 
 
 CSV_TEAM_COLUMNS = ["Rank", "Team", "Name", "OPR", "Auto", "Teleop", "Endgame", "AVG", "NEW AVG",
-                    "Proj OPR", "T.D.C. issue", "T.D.C. delta", "FTC AVG", "Focus", "CAP",
+                    "Projected OPR", "Technical issue", "Technical issues adjustment", "Team average", "Focus", "CAP",
                     "CAP-OPR", "EPA", "Events", "Source event", "Record"]
 
 CSV_MATCH_COLUMNS = ["Match", "Red 1", "Red 2", "Blue 1", "Blue 2", "Red pts", "Blue pts",
-                     "Red COW", "Blue COW", "Red strength", "Blue strength",
+                     "Red win chance", "Blue win chance", "Red strength", "Blue strength",
                      "Predicted", "Actual", "Red score", "Blue score",
                      "Correct", "Surrogates"]
 
 CSV_STANDING_COLUMNS = ["Rank", "Team", "Name", "Wins", "Losses", "Played", "Scheduled",
-                        "RP", "TBP1", "TBP2", "Captain"]
+                        "Ranking points", "Auto tiebreaker points", "Endgame tiebreaker points", "Captain"]
 
 CSV_ALLIANCE_COLUMNS = ["Rank", "Team 1", "Team 2", "Teams", "Total CAP", "Beats", "Opponents",
                         "Win rate", "Alliance Strength", "Closest opponent", "Margin",
@@ -5666,14 +5666,14 @@ def printable_text(session) -> str:
     """Monospace version of the printable report."""
     rep = _analysis.analyze(session)
     out: list[str] = []
-    title = f"{APP_FULL_TITLE} — {session.event_name}"
+    title = f"{APP_FULL_TITLE} - {session.event_name}"
     out += [title, "=" * len(title), f"{APP_TAGLINE} · {APP_ORG_FULL}", ""]
     for k, v in _header_facts(session, rep):
         out.append(f"{k + ':':14s}{v}")
     out.append("")
 
     out += ["MATCHES", "-------"]
-    out += _table(["Match", "Red", "Blue", "Red pts", "Blue pts", "COW", "Predicted", "Actual", "OK"],
+    out += _table(["Match", "Red", "Blue", "Red pts", "Blue pts", "Win chance", "Predicted", "Actual", "OK"],
                   [[p.match.label,
                     " ".join(str(n) for n in p.match.red),
                     " ".join(str(n) for n in p.match.blue),
@@ -5688,7 +5688,7 @@ def printable_text(session) -> str:
     lab = session.settings.basis
     title = f"TEAMS (by {lab})"
     out += [title, "-" * len(title)]
-    out += _table(["#", "Team", "Name", "OPR", "Auto", "Tele", "Endg", "ProjOPR", "CAP", "EPA", "T.D.C."],
+    out += _table(["#", "Team", "Name", "OPR", "Auto", "Tele", "Endg", "ProjOPR", "CAP", "EPA", "Technical issue"],
                   [[i, t.number, t.name[:22], f"{t.opr:.1f}", f"{t.auto:.1f}", f"{t.teleop:.1f}",
                     f"{t.endgame:.1f}", _f(t.proj_opr, 1) or "n/a", f"{t.cap:.1f}", _f(t.epa, 1), t.tdc_issue]
                    for i, t in enumerate(session.teams_by_strength(), 1)],
@@ -5696,7 +5696,7 @@ def printable_text(session) -> str:
     out.append("")
 
     out += ["PROJECTED STANDINGS", "-------------------"]
-    out += _table(["Rank", "Team", "Name", "W-L", "RP", "TBP1", "TBP2", ""],
+    out += _table(["Rank", "Team", "Name", "W-L", "Ranking points", "Auto tiebreaker points", "Endgame tiebreaker points", ""],
                   [[r.rank, r.number, r.name[:22], f"{r.wins}-{r.losses}", f"{r.rp:.2f}",
                     f"{r.tbp1:.1f}", f"{r.tbp2:.1f}", "captain" if r.captain_rank else ""]
                    for r in session.table],
@@ -5706,7 +5706,7 @@ def printable_text(session) -> str:
     if session.my_team and session.my_team in session.teams:
         info = session.my_summary()
         out += [f"MY TEAM {session.my_team}", "-" * (8 + len(str(session.my_team)))]
-        out += _table(["Match", "Color", "With", "Against", "COW", "MR", "Predicted", "Actual"],
+        out += _table(["Match", "Color", "With", "Against", "Win chance", "Match rating", "Predicted", "Actual"],
                       [[x.prediction.match.label, x.color,
                         " ".join(str(n) for n in x.partner),
                         " ".join(str(n) for n in x.opponents),
@@ -5724,9 +5724,9 @@ def printable_text(session) -> str:
         out.append(f"{len(alli.table)} possible alliances; {len(alli.unbeatable)} beat every "
                    f"alliance they could face (no shared team, so both could take the field).")
         if alli.bar is not None:
-            out.append(f"Team {alli.my_team}: rank {alli.my_rank}, {lab} {alli.my_cap:.1f} — "
+            out.append(f"Team {alli.my_team}: rank {alli.my_rank}, {lab} {alli.my_cap:.1f} - "
                        f"pick must be above {alli.bar:.1f}")
-        out += _table(["#", "Alliance", "Total", "Beats", "Win rate", "Closest", "Margin", "COW", ""],
+        out += _table(["#", "Alliance", "Total", "Beats", "Win rate", "Closest", "Margin", "Win chance", ""],
                       [[a.rank, a.label, f"{a.cap_sum:.1f}", f"{a.beats}/{a.legal}",
                         f"{a.win_rate:.1%}", " + ".join(str(n) for n in a.closest),
                         f"{a.margin:+.1f}", f"{a.cow:.0%}", "UNBEATABLE" if a.unbeatable else ""]
@@ -5739,7 +5739,7 @@ def printable_text(session) -> str:
         out += ["ALLIANCE CAPTAINS", "-----------------"]
         out += _table(["Cpt.", "Team", "Name", lab, "Best avail.", "Likely pick", "Proj. total", "Pick above"],
                       [[s.rank, s.team, s.name[:22], f"{s.cap:.1f}", f"{s.best_available:.1f}",
-                        f"{s.pick or '—'} ({s.pick_cap:.1f})", f"{s.projected_total:.1f}", f"{s.bar:.1f}"]
+                        f"{s.pick or '-'} ({s.pick_cap:.1f})", f"{s.projected_total:.1f}", f"{s.bar:.1f}"]
                        for s in alli.seats],
                       aligns="rrlrrlrr")
         out.append("")
@@ -5747,7 +5747,7 @@ def printable_text(session) -> str:
         if alli.partners:
             title = f"TEAMS {alli.my_team} COULD WIN WITH"
             out += [title, "-" * len(title)]
-            out += _table(["Partner", "Name", f"Their {lab}", "Total", "Beats", "Win rate", "COW", ""],
+            out += _table(["Partner", "Name", f"Their {lab}", "Total", "Beats", "Win rate", "Win chance", ""],
                           [[a.partner_of(alli.my_team), a.partner_name(alli.my_team)[:22],
                             f"{a.partner_cap(alli.my_team):.1f}", f"{a.cap_sum:.1f}",
                             f"{a.beats}/{a.legal}", f"{a.win_rate:.1%}", f"{a.cow:.0%}",
@@ -5831,7 +5831,7 @@ def _color_span(c: Optional[str]) -> str:
         return '<span class="red">RED</span>'
     if c == "BLUE":
         return '<span class="blue">BLUE</span>'
-    return _e(c or "—")
+    return _e(c or "-")
 
 
 def _html_table(headers: list[str], rows: list[list[str]], numeric: set[int] = frozenset(),
@@ -5858,7 +5858,7 @@ def html_report(session) -> str:
     b = io.StringIO()
     b.write("<!doctype html>\n<html lang='en'><head><meta charset='utf-8'>")
     b.write("<meta name='viewport' content='width=device-width, initial-scale=1'>")
-    b.write(f"<title>{_e(APP_FULL_TITLE)} — {_e(session.event_name)}</title>")
+    b.write(f"<title>{_e(APP_FULL_TITLE)} - {_e(session.event_name)}</title>")
     b.write(f"<style>{_CSS}</style></head><body>")
     b.write(
         "<div class='brandbar'>"
@@ -5882,8 +5882,8 @@ def html_report(session) -> str:
         m = p.match
         ok = "" if p.correct is None else (
             "<span class='ok'>&#10004;</span>" if p.correct else "<span class='bad'>&#10008;</span>")
-        actual = _color_span(m.winner) if m.winner else "—"
-        score = f"{m.red_score:.0f}–{m.blue_score:.0f}" if m.red_score is not None else "—"
+        actual = _color_span(m.winner) if m.winner else "-"
+        score = f"{m.red_score:.0f}–{m.blue_score:.0f}" if m.red_score is not None else "-"
         pct = p.red_cow * 100
         bar = (f"<span class='bar' style='width:{pct * 0.6:.0f}px'></span> "
                f"{p.red_cow:.0%} / {p.blue_cow:.0%}")
@@ -5908,7 +5908,7 @@ def html_report(session) -> str:
                      _e(t.focus if t.focus != "performance" else "")])
         classes.append("mine" if mine == t.number else "")
     b.write(_html_table(["#", "Team", "Name", "OPR", "Auto", "Teleop", "Endgame", "NEW AVG",
-                         "Proj OPR", "CAP", "EPA", "T.D.C.", "Focus"],
+                         "Projected OPR", "CAP", "EPA", "Technical issue", "Focus"],
                         rows, numeric={0, 1, 3, 4, 5, 6, 7, 8, 9, 10}, row_classes=classes))
 
     b.write("<h2>Projected standings</h2>")
@@ -5918,7 +5918,7 @@ def html_report(session) -> str:
                      str(r.scheduled), f"{r.rp:.2f}", f"{r.tbp1:.1f}", f"{r.tbp2:.1f}",
                      "captain" if r.captain_rank else ""])
         classes.append("mine" if mine == r.number else "")
-    b.write(_html_table(["Rank", "Team", "Name", "W–L", "Matches", "RP", "TBP1", "TBP2", ""],
+    b.write(_html_table(["Rank", "Team", "Name", "W–L", "Matches", "Ranking points", "Auto tiebreaker points", "Endgame tiebreaker points", ""],
                         rows, numeric={0, 1, 4, 5, 6, 7}, row_classes=classes))
 
     if mine and mine in session.teams:
@@ -5928,10 +5928,10 @@ def html_report(session) -> str:
                  _e(" ".join(str(n) for n in x.partner)),
                  _e(" ".join(str(n) for n in x.opponents)),
                  f"{x.cow:.0%}", str(x.rating),
-                 "Win" if x.predicted_win else "Loss", _e(x.actual or "—")]
+                 "Win" if x.predicted_win else "Loss", _e(x.actual or "-")]
                 for x in info["matches"]]
         b.write(_html_table(["Match", "Alliance", "With", "Against", "Chance of winning",
-                             "MR", "Predicted", "Actual"], rows, numeric={4, 5}))
+                             "Match rating", "Predicted", "Actual"], rows, numeric={4, 5}))
         b.write(f"<p class='sub'>Predicted wins {info['wins']}/{len(info['matches'])} &middot; "
                 f"old RP {info['old_rp']} &middot; projected rank {info['rank']}</p>")
 
@@ -5940,7 +5940,7 @@ def html_report(session) -> str:
         b.write("<h2>Best alliances</h2>")
         b.write(f"<p class='sub'>{len(alli.table)} possible two-team alliances &middot; "
                 f"{len(alli.unbeatable)} beat every alliance they could face"
-                + (f" &middot; team {_e(alli.my_team)} is rank {_e(alli.my_rank or '—')} "
+                + (f" &middot; team {_e(alli.my_team)} is rank {_e(alli.my_rank or '-')} "
                    f"with {lab} {alli.my_cap:.1f}, pick must be above {alli.bar:.1f}"
                    if alli.bar is not None else "") + "</p>")
         rows, classes = [], []
@@ -5959,7 +5959,7 @@ def html_report(session) -> str:
         b.write(_html_table(["Cpt.", "Team", "Name", lab, "Best available", "Likely pick",
                              f"Pick {lab}", "Projected total", "Pick above"],
                             [[str(s.rank), _e(s.team), _e(s.name), f"{s.cap:.1f}",
-                              f"{s.best_available:.1f}", _e(s.pick or "—"), f"{s.pick_cap:.1f}",
+                              f"{s.best_available:.1f}", _e(s.pick or "-"), f"{s.pick_cap:.1f}",
                               f"{s.projected_total:.1f}", f"{s.bar:.1f}"] for s in alli.seats],
                             numeric={0, 1, 3, 4, 5, 6, 7, 8},
                             row_classes=["mine" if mine == s.team else "" for s in alli.seats]))
@@ -5990,7 +5990,7 @@ def html_report(session) -> str:
                               _e(x.suggestion), _e(x.classification)]
                              for x in rep.wrong], numeric={3, 4}))
 
-    b.write(f"<footer>{_e(APP_FULL_TITLE)} {_e(__version__)} — {lab}, chance of winning and the "
+    b.write(f"<footer>{_e(APP_FULL_TITLE)} {_e(__version__)} - {lab}, chance of winning and the "
             f"analysis suggestions are ported from the AutoScout v1.3 spreadsheets. "
             f"Chance of winning is a share of predicted points, not a calibrated probability."
             f"<br>{_e(APP_ORG_FULL)} · <a href='{_e(APP_WEBSITE)}'>{_e(APP_WEBSITE)}</a>"
@@ -6027,7 +6027,7 @@ from typing import Optional, Callable
 
 @dataclass
 class ManualTeam:
-    """Per-team inputs the user controls (T.D.C. sheet + AutoSheet 'Team Focus')."""
+    """Per-team inputs the user controls (Technical Issues section + AutoSheet 'Team Focus')."""
     tdc_issue: str = ""
     tdc_delta: float = 0.0
     focus: str = "performance"
@@ -6161,7 +6161,7 @@ class Session:
                             else predict(self.matches, self.teams))
         self.table = standings(self.predictions, self.teams, s.matches_per_team)
         # Alliance Strength: every scheduled match's two alliances, run through the same
-        # win-rate-vs-Total-CAP curve as the "All possible alliances" chart — fitted fresh
+        # win-rate-vs-Total-CAP curve as the "All possible alliances" chart - fitted fresh
         # from this event's own alliance_table, not hard-coded (see fit_alliance_strength).
         self.strength_fit = fit_alliance_strength(alliance_table(self.teams))
         if self.strength_fit is not None:
@@ -6294,7 +6294,7 @@ def load_fixture_session(fixture_dir: str, my_team: int = 12928, settings: Optio
 
 Holds only things the user would be annoyed to retype: the window geometry,
 the last session file opened or saved, and the last Setup-tab entries. Never
-holds scouting data — that lives in the session .json.
+holds scouting data - that lives in the session .json.
 """
 
 import json
@@ -6347,12 +6347,12 @@ def save(values: dict) -> None:
 def get(key: str, default: Any = None) -> Any:
     return load().get(key, _DEFAULTS.get(key, default))
 
-"""Tkinter desktop UI — the eight AutoScout spreadsheets as one window.
+"""Tkinter desktop UI - the eight AutoScout spreadsheets as one window.
 
 Each notebook tab reproduces one part of the original workbook set:
 
     Setup      AutoRegister form + Global_Var URLs + Meet Loading Data
-    Teams      AutoSheet.Sheet1 + STAT PAGE.MAIN DATA + T.D.C. + PROJ. OPR
+    Teams      AutoSheet.Sheet1 + STAT PAGE.MAIN DATA + Technical Issues + PROJ. OPR
     Matches    Main-Calc.TED rows 48+ and AutoScout '1' rows 3..143
     My Team    AutoScout '1' scouting panel (R..AA)
     Standings  AutoScout.Sheet16
@@ -6362,7 +6362,7 @@ Each notebook tab reproduces one part of the original workbook set:
 
 Rules this file keeps to: standard library only, ttk widgets only (so a
 PyInstaller --onefile --windowed build works on macOS, Windows and Linux with
-stock Tk 8.6), no network call on the Tk thread, and no Tk call off it — worker
+stock Tk 8.6), no network call on the Tk thread, and no Tk call off it - worker
 threads hand results back through `App.after`.
 """
 
@@ -6421,7 +6421,7 @@ def as_float(text: str, default: float = 0.0) -> float:
 def sort_key(value: str):
     """Sort a Treeview cell: numbers numerically, blanks/'n/a' last."""
     s = str(value).strip().replace("%", "").replace("+", "")
-    if s in ("", NA, "—"):
+    if s in ("", NA, "-"):
         return (2, 0.0, "")
     try:
         return (0, float(s), "")
@@ -6440,25 +6440,26 @@ def value_to_tristate(value: Optional[bool]) -> str:
     return "Follow mode" if value is None else ("On" if value else "Off")
 
 
-CAP_EXPLAINER = """CAP — "Calculated Average Points"
+CAP_EXPLAINER = """CAP: Calculated Average Points
+
+Quick glossary: FTC means FIRST Tech Challenge; CAP means Calculated Average Points; OPR means Offensive Power Rating; EPA means Expected Points Added; RP means Ranking Points; MR means Match rating; EOPR means Event Offensive Power Rating; TBP1 means the autonomous tiebreaker points; TBP2 means the endgame tiebreaker points; AUTO means autonomous scoring; TELEOP means teleoperated scoring; ENDGAME means endgame scoring; AVG means average; PROJ means projected. Win chance means Chance of Winning.
 
 CAP is AutoScout's single number for how many points a team is worth to its
 alliance. It starts from the team's non-penalty OPR and nudges it with the
 team's own scoring mix, so two teams with the same OPR are separated by how
 they earn it.
 
-The inputs (AutoSheet!L, ported literally in core.cap):
-  OPR        non-penalty OPR at the source event
-  AUTO/ENDG  the auto and endgame components (TBP1/TBP2 in sheet-faithful mode)
+The inputs (from the original scoring worksheet):
+  OPR        Offensive Power Rating, adjusted to exclude penalties
+  AUTO/ENDG  autonomous and endgame scoring components
   FTC AVG    (AUTO+TELEOP+ENDGAME averaged with OPR), adjusted for a known
-             robot problem on the T.D.C. tab, plus your manual delta
+             robot problem on the Technical Issues tab, plus your manual delta
   PROJ OPR   a straight-line extrapolation of the team's OPR across its events
   RS -/+     a small penalty when a team's focus is set to "award" rather than
              "performance"
 
 A match prediction is just CAP(red 1) + CAP(red 2) against the same for blue,
-and the "chance of winning" is one side's share of the two totals — a point
-share, not a calibrated probability.
+and Win chance is the model's estimated probability that an alliance will win.
 """
 
 CHARTS_EXPLAINER = """Charts (new in 2.2)
@@ -6469,7 +6470,7 @@ of each event, auto/teleop/endgame, rank, RP…) or over its matches at this
 event (the EPA it carried into each match, predicted vs actual points,
 chance of winning). Pick what goes on each axis; up to three Y series at
 once. Underneath, "Edit this team's data inputs" lets you type your own
-OPR, Auto, Teleop, Endgame, projected OPR or EPA — blank means FTCScout's
+OPR, Auto, Teleop, Endgame, projected OPR or EPA - blank means FTCScout's
 value. Overrides feed CAP, every prediction and every chart, are marked in
 the table, and are saved with the session.
 
@@ -6479,14 +6480,14 @@ Charts tab:
                         optional Z (marker size and colour), e.g. OPR vs CAP
                         sized by EPA; the dashed x = y line is where the two
                         statistics agree. "Compare ratings": teams ordered by
-                        one statistic with OPR, CAP and EPA drawn as lines —
+                        one statistic with OPR, CAP and EPA drawn as lines -
                         where the lines sit together the methods converge and
                         the call is safer; the grey bars show the disagreement.
   Matches & alliances   the schedule's matches (predicted red vs blue points,
                         margin, chance of winning, actual scores, error), or
                         every possible two-team alliance / every partner for
                         your team (total rating, each member's rating, win
-                        rate, margin over the closest opponent) — to see which
+                        rate, margin over the closest opponent) - to see which
                         pairings are strongest and which are lopsided.
 
 Hover a point for its details; click a point to open that team (or match).
@@ -6661,7 +6662,7 @@ class CompetitionDayTab(Tab):
         self.event_line.pack(anchor="w")
 
         metrics = ttk.Frame(self); metrics.pack(fill="x", pady=(0, 12))
-        self.metric_vars = [tk.StringVar(value="—") for _ in range(5)]
+        self.metric_vars = [tk.StringVar(value="-") for _ in range(5)]
         labels = ("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM")
         for i, (lab, var) in enumerate(zip(labels, self.metric_vars)):
             card = tk.Frame(metrics, bg="#ffffff", highlightbackground=UI_BORDER,
@@ -6722,7 +6723,7 @@ class CompetitionDayTab(Tab):
         upcoming = next((m for m in matches if not m.played), None)
         self.event_line.configure(text=f"{s.event_name or 'No event loaded'}  •  Season {s.season}  •  {s.event_code or 'No event code'}")
         vals = (str(len(s.teams)), str(len(matches)), f"{played}/{len(matches)}",
-                upcoming.label if upcoming else ("Complete" if matches else "—"),
+                upcoming.label if upcoming else ("Complete" if matches else "-"),
                 str(s.my_team or "Not set"))
         for v, value in zip(self.metric_vars, vals): v.set(value)
         self.match_tree.delete(*self.match_tree.get_children())
@@ -6733,7 +6734,7 @@ class CompetitionDayTab(Tab):
             if p:
                 red_chance = p.red_cow * 100
                 forecast = f"R {red_chance:.0f}% / B {100-red_chance:.0f}%"
-            else: forecast = "—"
+            else: forecast = "-"
             status = "Played" if m.played else "Upcoming"
             self.match_tree.insert("", "end", iid=m.label, values=(m.label, red, blue, forecast, status))
         if matches and upcoming and self.match_tree.exists(upcoming.label):
@@ -6754,10 +6755,10 @@ class CompetitionDayTab(Tab):
             return "\n".join(f"  {n}  {s.team_names.get(n, 'Team name unavailable')}" for n in nums)
         lines = [f"RED ALLIANCE\n{team_line(m.red)}", "", f"BLUE ALLIANCE\n{team_line(m.blue)}"]
         if p:
-            lines += ["", f"Predicted score:  Red {p.red_pts:.1f}  —  Blue {p.blue_pts:.1f}",
+            lines += ["", f"Predicted score:  Red {p.red_pts:.1f}  -  Blue {p.blue_pts:.1f}",
                       f"Win probability:  Red {p.red_cow:.1%}  |  Blue {p.blue_cow:.1%}"]
         if m.played and m.red_score is not None and m.blue_score is not None:
-            lines += ["", f"ACTUAL RESULT:  Red {m.red_score:g}  —  Blue {m.blue_score:g}"]
+            lines += ["", f"ACTUAL RESULT:  Red {m.red_score:g}  -  Blue {m.blue_score:g}"]
         notes = s.live_notes.get(label, [])
         lines += ["", f"SCOUTING NOTES: {len(notes)} saved"]
         self.detail_text.configure(state="normal"); self.detail_text.delete("1.0", "end")
@@ -6785,11 +6786,11 @@ class HomeTab(Tab):
                  font=(self.app.title_family, 9, "bold")).pack(anchor="w")
         tk.Label(hero, text="Scout smarter. Pick stronger alliances.", bg=THEME_BG, fg="#ffffff",
                  font=(self.app.title_family, 22, "bold")).pack(anchor="w", pady=(5, 3))
-        tk.Label(hero, text="Your match data, team intelligence, and strategy tools — together in one workspace.",
+        tk.Label(hero, text="Your match data, team intelligence, and strategy tools - together in one workspace.",
                  bg=THEME_BG, fg=THEME_ACCENT_TEXT, font=(self.app.body_family, 10)).pack(anchor="w")
         metrics = ttk.Frame(self)
         metrics.pack(fill="x", pady=(0, 14))
-        self.home_metric_vars = [tk.StringVar(value="—") for _ in range(4)]
+        self.home_metric_vars = [tk.StringVar(value="-") for _ in range(4)]
         self.home_metric_labels = ["TEAMS TRACKED", "MATCHES LOADED", "MY TEAM", "SESSION STATUS"]
         for i, (label, var) in enumerate(zip(self.home_metric_labels, self.home_metric_vars)):
             card = tk.Frame(metrics, bg="#ffffff", highlightbackground=UI_BORDER, highlightthickness=1, padx=16, pady=13)
@@ -6849,8 +6850,8 @@ class HomeTab(Tab):
 class SetupTab(Tab):
     """Replaces the AutoRegister Google Form and the sheet-URL plumbing.
 
-    Everything the old system needed a registration round-trip for — season,
-    meet code, your team, the team list — is typed here, and the pasted
+    Everything the old system needed a registration round-trip for - season,
+    meet code, your team, the team list - is typed here, and the pasted
     schedule box stands in for MEET LOADING DATA's IMPORTXML scrape.
     """
 
@@ -6889,17 +6890,17 @@ class SetupTab(Tab):
         team_entry.bind("<Return>", lambda _e: self.apply_my_team())
         team_entry.bind("<FocusOut>", lambda _e: self.apply_my_team())
 
-        # Everything else is optional and hidden by default — a first-time
+        # Everything else is optional and hidden by default - a first-time
         # user only needs the three fields above to get going.
         adv = Collapsible(form, text="Advanced options")
         adv.grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
         ttk.Label(adv.body, text="Extra team numbers (optional)").grid(row=0, column=0, sticky="w", padx=(0, 8))
         ttk.Entry(adv.body, textvariable=self.extra_var, width=34).grid(row=0, column=1, sticky="w")
-        offline_chk = ttk.Checkbutton(adv.body, text="Offline (cache only — never touch the network)",
+        offline_chk = ttk.Checkbutton(adv.body, text="Offline (cache only - never touch the network)",
                                        variable=self.offline_var)
         offline_chk.grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 0))
         Tooltip(offline_chk, "Use only what's already saved locally. Nothing is\n"
-                              "downloaded — good for spotty wifi at a meet.")
+                              "downloaded - good for spotty wifi at a meet.")
         history_chk = ttk.Checkbutton(adv.body, text="Fetch each team's season history (needed for projected OPR)",
                                        variable=self.history_var)
         history_chk.grid(row=2, column=0, columnspan=3, sticky="w")
@@ -6910,7 +6911,7 @@ class SetupTab(Tab):
         paste = ttk.LabelFrame(self, text="Paste schedule (used when FTCScout has no schedule)", padding=12)
         paste.pack(fill="both", expand=True, pady=8)
         ttk.Label(paste, foreground=UI_MUTED, justify="left", text=(
-            "One match per line — the first two team numbers are red, the next two blue.\n"
+            "One match per line - the first two team numbers are red, the next two blue.\n"
             "    Q-1  11225 19013  19564 23213\n"
             "    1    11225 19013 vs 19564 23213   104-66\n"
             "A trailing red-blue score marks the match as played.")
@@ -7053,19 +7054,19 @@ TEAM_COLUMNS = [
     ("rank", "#", 40, "e"), ("team", "Team", 62, "e"), ("name", "Name", 190, "w"),
     ("opr", "OPR", 62, "e"), ("auto", "Auto", 58, "e"), ("teleop", "Teleop", 62, "e"),
     ("endgame", "Endgame", 68, "e"), ("avg", "AVG", 62, "e"), ("new_avg", "NEW AVG", 72, "e"),
-    ("proj_opr", "Proj OPR", 72, "e"), ("events", "Events", 54, "e"),
-    ("tdc", "T.D.C. issue", 92, "w"), ("delta", "Delta", 58, "e"), ("focus", "Focus", 88, "w"),
-    ("ftc_avg", "FTC AVG", 72, "e"), ("cap", "CAP", 66, "e"), ("cap_opr", "CAP−OPR", 74, "e"),
+    ("proj_opr", "Projected OPR", 72, "e"), ("events", "Events", 54, "e"),
+    ("tdc", "Technical issue", 92, "w"), ("delta", "Delta", 58, "e"), ("focus", "Focus", 88, "w"),
+    ("ftc_avg", "Team average", 72, "e"), ("cap", "CAP", 66, "e"), ("cap_opr", "CAP−OPR", 74, "e"),
     ("epa", "EPA", 62, "e"),
 ]
 
 
 class TeamsTab(Tab):
     """AutoSheet.Sheet1 ranked by the chosen rating (CAP unless Settings says otherwise),
-    with STAT PAGE's columns, an EPA column and the T.D.C. inputs.
+    with STAT PAGE's columns, an EPA column and the Technical Issues inputs.
 
     The table is AutoSheet's C2 ranking (teams sorted by CAP desc); the editor
-    below it is the T.D.C. workbook — issue tag (K), manual delta (N) — plus
+    below it is the Technical Issues section - issue tag (K), manual delta (N) - plus
     AutoSheet!O "Team Focus".
     """
 
@@ -7092,7 +7093,7 @@ class TeamsTab(Tab):
         self.tree.pack(fill="both", expand=True)
         self.tree.bind_select(self._on_select)
 
-        ed = ttk.LabelFrame(left, text="Adjust the selected team (T.D.C. + Team Focus)", padding=8)
+        ed = ttk.LabelFrame(left, text="Adjust the selected team (Technical Issues + Team Focus)", padding=8)
         ed.pack(fill="x", pady=(8, 0))
         self.sel_var = tk.StringVar(value="No team selected.")
         ttk.Label(ed, textvariable=self.sel_var, width=34).grid(row=0, column=0, columnspan=2, sticky="w")
@@ -7102,7 +7103,7 @@ class TeamsTab(Tab):
         self.focus_var = tk.StringVar()
         self.note_var = tk.StringVar()
 
-        ttk.Label(ed, text="T.D.C. issue").grid(row=1, column=0, sticky="w", padx=(0, 6))
+        ttk.Label(ed, text="Technical issue").grid(row=1, column=0, sticky="w", padx=(0, 6))
         self.tdc_box = ttk.Combobox(ed, textvariable=self.tdc_var, values=list(TDC_ISSUES),
                                     state="readonly", width=14)
         self.tdc_box.grid(row=1, column=1, sticky="w")
@@ -7196,10 +7197,10 @@ class TeamsTab(Tab):
 MATCH_COLUMNS = [
     ("label", "Match", 62, "w"), ("r1", "Red 1", 62, "e"), ("r2", "Red 2", 62, "e"),
     ("b1", "Blue 1", 62, "e"), ("b2", "Blue 2", 62, "e"),
-    ("rpts", "Pred red", 72, "e"), ("bpts", "Pred blue", 74, "e"),
-    ("rcow", "Red COW", 72, "e"), ("bcow", "Blue COW", 74, "e"),
+    ("rpts", "Pred. red", 72, "e"), ("bpts", "Pred. blue", 74, "e"),
+    ("rcow", "Red win chance", 72, "e"), ("bcow", "Blue win chance", 74, "e"),
     ("rstr", "Red strength", 84, "e"), ("bstr", "Blue strength", 86, "e"),
-    ("pred", "Predicted", 78, "w"), ("score", "Actual score", 96, "e"),
+    ("pred", "Pred.", 78, "w"), ("score", "Actual score", 96, "e"),
     ("actual", "Actual", 66, "w"), ("ok", "✔/✘", 44, "center"),
     ("poa", "PoA (exp.)", 78, "e"),
 ]
@@ -7208,9 +7209,9 @@ MATCH_COLUMNS = [
 class MatchesTab(Tab):
     """Main-Calc.TED's schedule block and the AutoScout '1' correct/incorrect column.
 
-    Predicted points are CAP sums (TED!D/E), COW is the point share (TED!F/G),
+    Predicted points are CAP sums (TED!D/E), Win chance is the estimated probability (TED!F/G),
     and the ✔/✘ column is AutoScout '1'!I once a real score exists. Double-click
-    a row to type a score by hand — the sheets' "Live Outcome" column C.
+    a row to type a score by hand - the sheets' "Live Outcome" column C.
     """
 
     title = "Matches"
@@ -7265,8 +7266,8 @@ class MatchesTab(Tab):
         self.tree.show_columns(keys)
         c, d = s.accuracy()
         played = sum(1 for m in s.matches if m.played)
-        self.acc_var.set(f"{len(s.matches)} matches, {played} played   —   accuracy {c}/{d}"
-                         + (f" = {c / d:.0%}" if d else "") + f"   —   predictions by {s.settings.basis}")
+        self.acc_var.set(f"{len(s.matches)} matches, {played} played   -   accuracy {c}/{d}"
+                         + (f" = {c / d:.0%}" if d else "") + f"   -   predictions by {s.settings.basis}")
 
     def edit_result(self, iid: str) -> None:
         if not iid:
@@ -7300,7 +7301,7 @@ class MatchesTab(Tab):
 
         def done(played: int) -> None:
             self.refresh_btn.state(["!disabled"])
-            self.status_var.set(f"Refreshed — {played} matches played.")
+            self.status_var.set(f"Refreshed - {played} matches played.")
             self.app.refresh_all()
 
         def failed(err: ApiError) -> None:
@@ -7336,7 +7337,7 @@ class ResultDialog(tk.Toplevel):
 
     def __init__(self, app: "App", match):
         super().__init__(app)
-        self.title(f"Result — {match.label}")
+        self.title(f"Result - {match.label}")
         self.transient(app)
         self.resizable(False, False)
         self.result: Optional[str] = None
@@ -7380,7 +7381,7 @@ class ResultDialog(tk.Toplevel):
 MY_MATCH_COLUMNS = [
     ("label", "Match", 66, "w"), ("color", "Alliance", 74, "w"), ("partner", "Partner", 90, "w"),
     ("opp", "Opponents", 140, "w"), ("cow", "Chance of winning", 130, "e"),
-    ("mr", "MR", 44, "center"), ("pred", "Predicted", 80, "w"), ("actual", "Actual", 70, "w"),
+    ("mr", "Match rating", 44, "center"), ("pred", "Pred.", 80, "w"), ("actual", "Actual", 70, "w"),
 ]
 
 
@@ -7481,13 +7482,13 @@ class MyTeamTab(Tab):
 STANDING_COLUMNS = [
     ("rank", "Rank", 54, "e"), ("team", "Team", 66, "e"), ("name", "Name", 200, "w"),
     ("wl", "W–L", 70, "center"), ("played", "Played", 86, "center"),
-    ("rp", "RP", 62, "e"), ("tbp1", "TBP1 (Auto)", 92, "e"), ("tbp2", "TBP2 (Endgame)", 106, "e"),
+    ("rp", "Ranking points", 62, "e"), ("tbp1", "TBP1 (Auto)", 92, "e"), ("tbp2", "TBP2 (Endgame)", 106, "e"),
     ("captain", "Captain", 70, "center"),
 ]
 
 
 class StandingsTab(Tab):
-    """AutoScout.Sheet16 — projected standings sorted by RP, then TBP1, then TBP2.
+    """AutoScout.Sheet16 - projected standings sorted by RP, then TBP1, then TBP2.
 
     Wins come from the real result when a match has been played and from the
     prediction otherwise, so the table is a forecast that hardens as the meet runs.
@@ -7512,7 +7513,7 @@ class StandingsTab(Tab):
                 f"{r.played} / {r.scheduled}", f"{r.rp:.2f}", f1(r.tbp1), f1(r.tbp2),
                 "★" if r.captain_rank else ""), tuple(tags)))
         self.tree.set_rows(rows)
-        self.head_var.set(f"{len(rows)} teams — projected standings (RP, then AUTO, then ENDGAME); "
+        self.head_var.set(f"{len(rows)} teams - projected standings (RP, then AUTO, then ENDGAME); "
                           "top 6 are likely alliance captains")
 
 ALLIANCE_COLUMNS = [
@@ -7544,13 +7545,13 @@ ALLIANCE_ROWS = 250
 
 
 class AlliancesTab(Tab):
-    """FTC AutoScout ALSO — every two-team alliance, scored against every alliance it
+    """FTC AutoScout ALSO - every two-team alliance, scored against every alliance it
     could line up against.
 
     Alliance strength is the CAP sum (TED!D/E) and an opponent may not share a team
     with the alliance being scored, so "beats" counts the alliances it out-scores among
     the ones it could actually face. An alliance that beats all of them is the sheet's
-    answer to what could win any scenario. The captain block is Sheet1 rows 3–8 — the
+    answer to what could win any scenario. The captain block is Sheet1 rows 3–8 - the
     six seeds, the pick the draft leaves each of them, and the "pick must be above" bar
     for the team in the box; the bottom table is Interface rows 5+, every partner that
     team could win with.
@@ -7574,7 +7575,7 @@ class AlliancesTab(Tab):
                                command=self.refresh)
         only.pack(side="left", padx=(12, 0))
         Tooltip(only, "Show only the alliances that out-score every alliance\n"
-                      "they could face — no shared team, so both could\n"
+                      "they could face - no shared team, so both could\n"
                       "take the field at the same time.")
 
         self.bar_var = tk.StringVar()
@@ -7658,7 +7659,7 @@ class AlliancesTab(Tab):
         self._fill_partners(rep)
 
     def _fill_partners(self, rep) -> None:
-        """Interface rows 5+ — every partner the team in the box could win with, with
+        """Interface rows 5+ - every partner the team in the box could win with, with
         the ones below its seat's bar dimmed rather than hidden."""
         if not rep.my_team or not rep.partners:
             self.partner_var.set("Partners")
@@ -7690,8 +7691,8 @@ class AlliancesTab(Tab):
 
 
 WRONG_COLUMNS = [
-    ("label", "Match", 70, "w"), ("pred", "Predicted", 80, "w"), ("actual", "Actual", 70, "w"),
-    ("pts", "Predicted pts", 110, "e"), ("score", "Actual score", 106, "e"),
+    ("label", "Match", 70, "w"), ("pred", "Pred.", 80, "w"), ("actual", "Actual", 70, "w"),
+    ("pts", "Pred. pts", 110, "e"), ("score", "Actual score", 106, "e"),
     ("suggest", "Suggestion", 220, "w"), ("cls", "Classification", 170, "w"),
 ]
 FLAG_COLUMNS = [
@@ -7702,13 +7703,13 @@ FLAG_COLUMNS = [
 
 
 # --------------------------------------------------------------------------- #
-# Charts (new in 2.2) — plain tk.Canvas plots, so the single-file / PyInstaller
+# Charts (new in 2.2) - plain tk.Canvas plots, so the single-file / PyInstaller
 # builds stay standard-library only. Three pieces:
 #
 #   ChartCanvas      a scatter / line chart with axes, legend, hover and click
 #   *_VARS tables    what can go on an axis, and how to read it from the session
 #   TeamChartPanel   one team's statistics over its events or its matches, with
-#                    the "edit data inputs" block — used by the Teams side menu
+#                    the "edit data inputs" block - used by the Teams side menu
 #                    and by the Charts tab
 #   ChartsTab        the Charts page: one team / all teams (OPR vs CAP vs EPA
 #                    convergence) / matches & alliance pairings
@@ -7720,7 +7721,7 @@ CHART_GRID = "#e6e9f0"
 CHART_AXIS = "#8a93a6"
 CHART_TEXT = UI_TEXT
 CHART_MUTED = UI_MUTED
-NONE_LABEL = "— none —"
+NONE_LABEL = "- none -"
 
 
 def nice_ticks(lo: float, hi: float, n: int = 5) -> list[float]:
@@ -8037,7 +8038,7 @@ def _opt(v) -> Optional[float]:
         return None
 
 
-#: Per-team variables: (key, label, getter(team, ctx)) — ctx has "standing" (number → Standing).
+#: Per-team variables: (key, label, getter(team, ctx)) - ctx has "standing" (number → Standing).
 TEAM_VARS: list[tuple[str, str, Callable]] = [
     ("team", "Team number", lambda t, c: float(t.number)),
     ("opr", "OPR (non-penalty)", lambda t, c: t.opr),
@@ -8049,9 +8050,9 @@ TEAM_VARS: list[tuple[str, str, Callable]] = [
     ("endgame", "Endgame", lambda t, c: t.endgame),
     ("avg", "AVG", lambda t, c: t.avg),
     ("new_avg", "NEW AVG", lambda t, c: t.new_avg),
-    ("ftc_avg", "FTC AVG (after T.D.C.)", lambda t, c: t.ftc_avg),
+    ("ftc_avg", "FTC AVG (after Technical Issues)", lambda t, c: t.ftc_avg),
     ("proj_opr", "Projected OPR", lambda t, c: _opt(t.proj_opr)),
-    ("eopr", "EOPR", lambda t, c: t.eopr),
+    ("eopr", "Event OPR", lambda t, c: t.eopr),
     ("cap_opr", "CAP − OPR", lambda t, c: t.cap - t.opr),
     ("epa_opr", "EPA − OPR", lambda t, c: None if t.epa is None else t.epa - t.opr),
     ("epa_cap", "EPA − CAP", lambda t, c: None if t.epa is None else t.epa - t.cap),
@@ -8064,7 +8065,7 @@ TEAM_VARS: list[tuple[str, str, Callable]] = [
     ("events", "Events played this season", lambda t, c: float(t.events_played)),
     ("epa_matches", "Matches EPA learned from", lambda t, c: float(t.epa_matches)),
     ("src_rank", "Rank at source event", lambda t, c: float(t.rank) if t.rank else None),
-    ("tdc_delta", "T.D.C. delta", lambda t, c: t.tdc_delta),
+    ("tdc_delta", "Technical issues adjustment", lambda t, c: t.tdc_delta),
 ]
 TEAM_VAR_LABELS = [lab for _, lab, _ in TEAM_VARS]
 TEAM_VAR_BY_LABEL = {lab: (k, fn) for k, lab, fn in TEAM_VARS}
@@ -8101,8 +8102,8 @@ MATCH_X_VARS = [("Match (in order)", "index"), ("Match number", "number")]
 ALL_MATCH_X_VARS = [("Match (in order played)", "index")]
 MATCH_Y_VARS: list[tuple[str, str, Callable]] = [
     ("epa", "EPA before the match", lambda mm, epa, p, m: epa),
-    ("pred_mine", "Predicted points, my alliance", lambda mm, epa, p, m: p.red_pts if mm.color == "RED" else p.blue_pts),
-    ("pred_opp", "Predicted points, opponents", lambda mm, epa, p, m: p.blue_pts if mm.color == "RED" else p.red_pts),
+    ("pred_mine", "Pred. points, my alliance", lambda mm, epa, p, m: p.red_pts if mm.color == "RED" else p.blue_pts),
+    ("pred_opp", "Pred. points, opponents", lambda mm, epa, p, m: p.blue_pts if mm.color == "RED" else p.red_pts),
     ("pred_margin", "Predicted margin", lambda mm, epa, p, m: (p.red_pts - p.blue_pts) * (1 if mm.color == "RED" else -1)),
     ("cow", "Chance of winning (%)", lambda mm, epa, p, m: mm.cow * 100),
     ("alliance_strength", "My alliance's Alliance Strength (%)",
@@ -8146,7 +8147,7 @@ PRED_VARS: list[tuple[str, str, Callable]] = [
     ("blue_cow", "Blue chance of winning (%)", lambda p: p.blue_cow * 100),
     ("red_strength", "Red Alliance Strength (fitted win rate %)", lambda p: p.red_strength),
     ("blue_strength", "Blue Alliance Strength (fitted win rate %)", lambda p: p.blue_strength),
-    ("closeness", "Closeness (50 − |COW − 50|)", lambda p: 50 - abs(p.red_cow * 100 - 50)),
+    ("closeness", "Closeness (50 − |Win chance − 50|)", lambda p: 50 - abs(p.red_cow * 100 - 50)),
     ("actual_red", "Actual red points (np)", lambda p: _alliance_score(p.match, "RED")),
     ("actual_blue", "Actual blue points (np)", lambda p: _alliance_score(p.match, "BLUE")),
     ("actual_margin", "Actual margin (red − blue, np)", lambda p: _margin(p.match, "RED")),
@@ -8182,9 +8183,9 @@ EXPLAIN_SHORT = {
               "tell the same story about it. Lines on top of each other = the ratings agree.",
     "matches": "Each point is one of this team's matches at this meet, in schedule order. Lines show what the team "
                "carried into each match (EPA) and how its alliance was predicted to score versus what it actually "
-               "scored — the gap between predicted and actual is the error for that match.",
+               "scored - the gap between predicted and actual is the error for that match.",
     "all_matches": "Each point is one match this team has played this season, oldest to newest, strung together "
-                   "across every event — not just this one. The same per-match lines as the single-event view (EPA "
+                   "across every event - not just this one. The same per-match lines as the single-event view (EPA "
                    "carried in, predicted vs. actual score) now run the whole season without resetting at each "
                    "event's boundary. Needs the meet loaded \u201cwith history.\u201d",
     "scatter": "Every team at the meet is one dot, placed by the two statistics on the axes. The optional Z "
@@ -8194,22 +8195,22 @@ EXPLAIN_SHORT = {
     "compare": "Every team at the meet is one column, lined up from weakest (left) to strongest (right) by the "
                "statistic in 'Order teams by'. Each coloured line is one rating (OPR, CAP, EPA…) for those same teams. "
                "Where the lines sit together, the methods agree and the prediction is on firm ground; where they "
-               "split, at least one method is wrong about that team — the grey bar is the size of the disagreement. "
+               "split, at least one method is wrong about that team - the grey bar is the size of the disagreement. "
                "The axis labels are the team numbers (a team with no value for the ordering statistic is left out).",
     "pred": "Each point is one match on the schedule, placed by the two statistics on the axes. Green = AutoScout "
             "called it right, red = called it wrong, gold = your team's match, plain = not played yet. Choosing a Z "
             "statistic replaces those colours with a size-and-colour scale.",
     "alliance": "Each point is one possible two-team alliance from the teams at this meet, placed by the two "
-                "statistics on the axes (only the strongest N by total rating are drawn — see 'Show top'). Gold = "
+                "statistics on the axes (only the strongest N by total rating are drawn - see 'Show top'). Gold = "
                 "the pairing out-scores every alliance it could legally face; blue = it includes your team. Pick "
                 "Total rating against Win rate (the default) to see the fitted curve and its equation.",
     "partners": "Each point is one possible partner for your team, placed by the two statistics on the axes. Use it "
-                "to see which partners give the strongest pairing — top-right is best on the default axes. Gold = "
+                "to see which partners give the strongest pairing - top-right is best on the default axes. Gold = "
                 "the pairing out-scores every alliance it could face.",
 }
 
 EXPLAIN_LONG = {
-    "events": """ONE TEAM — EVENTS THIS SEASON
+    "events": """ONE TEAM - EVENTS THIS SEASON
 
 X axis: the events the team has played this season, oldest on the left ("Event (in order played)"),
 or placed by calendar date ("Event date").
@@ -8227,7 +8228,7 @@ mean the ratings agree about the team; a line that pulls away shows one method r
 something the others miss (EPA, for example, only moves once matches are played).
 
 Hover a point for the event and its value; "Save image…" writes the chart to a file.""",
-    "matches": """ONE TEAM — MATCHES AT THIS EVENT
+    "matches": """ONE TEAM - MATCHES AT THIS EVENT
 
 X axis: the team's matches on this meet's schedule, in order (or by match number).
 
@@ -8244,9 +8245,9 @@ Y axis / Y2 / Y3: up to three statistics, one point per match:
 How to read it: the vertical gap between "Predicted points" and "Actual points" is the error for
 that match. A steady gap means the team is consistently under- or over-rated; a single spike is
 usually one bad (or great) match. Matches not yet played have no actual values.""",
-    "all_matches": """ONE TEAM — ALL MATCHES THIS SEASON
+    "all_matches": """ONE TEAM - ALL MATCHES THIS SEASON
 
-X axis: every match this team has played this season, oldest first — earlier events' matches,
+X axis: every match this team has played this season, oldest first - earlier events' matches,
 then this event's, back to back as one continuous timeline instead of resetting at each event.
 
 Y axis / Y2 / Y3: the same per-match statistics as "Matches at this event":
@@ -8263,15 +8264,15 @@ How to read it: this stitches every event's schedule into one timeline, so EPA a
 can be watched match by match across the whole season. It needs the meet loaded "with history"
 so earlier events' match results are available; without that, only this event's matches show up,
 same as "Matches at this event". Hover a point for the event, match label and value.""",
-    "scatter": """ALL TEAMS — SCATTER
+    "scatter": """ALL TEAMS - SCATTER
 
 Every team at the meet is one dot. X axis and Y axis can be any per-team statistic: OPR, CAP,
 EPA, the prediction rating in use, Auto, Teleop, Endgame, AVG, NEW AVG, FTC AVG, Projected OPR,
 EOPR, CAP − OPR, EPA − OPR, EPA − CAP, rating spread, projected rank and RP, wins, events played,
-matches EPA has learned from, rank at the source event, T.D.C. delta.
+matches EPA has learned from, rank at the source event, Technical issues adjustment.
 
 Z (size + colour): an optional third statistic. Bigger, more golden dots have a higher value;
-small navy dots a lower one. "— none —" turns it off, and your own team is then drawn in gold.
+small navy dots a lower one. "- none -" turns it off, and your own team is then drawn in gold.
 
 The dashed x = y line appears when both axes are ratings: dots on the line are teams the two
 statistics agree about; the further from the line, the bigger the disagreement.
@@ -8283,7 +8284,7 @@ Suggested views:
   X = Auto, Y = Teleop, Z = Endgame  what kind of robot each team is
 
 "Label points" writes the team number beside each dot. Click a dot to open that team.""",
-    "compare": """ALL TEAMS — COMPARE RATINGS (WHERE THEY CONVERGE)
+    "compare": """ALL TEAMS - COMPARE RATINGS (WHERE THEY CONVERGE)
 
 What each part means:
   Columns (X axis)     one column per team at the meet, lined up from weakest on the left to
@@ -8309,7 +8310,7 @@ How to read it:
 
 The Y axis and Z boxes do not apply in this view, which is why they are hidden. Click a point
 to open that team on the Teams tab.""",
-    "pred": """MATCHES & ALLIANCES — MATCHES ON THE SCHEDULE
+    "pred": """MATCHES & ALLIANCES - MATCHES ON THE SCHEDULE
 
 Each point is one match. Axis choices: match number, predicted red / blue points, predicted
 margin (signed or absolute), predicted total, red / blue chance of winning, closeness (how near
@@ -8322,13 +8323,13 @@ not played yet. Choosing a Z statistic replaces the colours with the size-and-co
 Actual points are non-penalty scores ("np"). Suggested views:
   X = Predicted red points, Y = Predicted blue points, Z = Predicted margin (absolute)
       dots near the diagonal are toss-ups; big gold dots are blow-outs
-  X = Match number, Y = Closeness (50 − |COW − 50|)   when in the day the tight matches fall
+  X = Match number, Y = Closeness (50 − |Win chance − 50|)   when in the day the tight matches fall
   X = Predicted margin (red − blue), Y = Actual margin (red − blue, np)
       a straight diagonal is perfect prediction; dots in the wrong quadrant are the wrong calls
   X = Match number, Y = Margin error (absolute)   did the predictions improve as the meet went on?
 
 Click a point to open that match on the Matches tab.""",
-    "alliance": """MATCHES & ALLIANCES — ALL POSSIBLE ALLIANCES
+    "alliance": """MATCHES & ALLIANCES - ALL POSSIBLE ALLIANCES
 
 Each point is one two-team pairing of teams at the meet. "Show top" limits the chart to the
 strongest N pairings by total rating ("all" draws every one). Axis choices: alliance rank,
@@ -8340,21 +8341,21 @@ that closest opponent.
 Colours: gold = the pairing out-scores every alliance it could face ("unbeatable"); blue = it
 includes your team. With a Z statistic chosen, size and colour show that statistic instead.
 
-The default view plots Total rating against Win rate — win rate is really each alliance's
+The default view plots Total rating against Win rate - win rate is really each alliance's
 percentile rank by Total CAP, i.e. the CDF of Total CAP over every possible alliance here, so
 the chart overlays a curve fitted fresh to this meet's own alliances (a shifted log-normal CDF:
 Win% = 100*Phi[(ln(Total CAP + shift) - mu) / sigma]), with its equation and R\u00b2 printed on
 the chart. "Alliance Strength" is that same fitted curve applied to a Total CAP value, i.e. a
-smoothed version of Win rate that also extrapolates sensibly between alliances — it's the same
+smoothed version of Win rate that also extrapolates sensibly between alliances - it's the same
 number shown for each scheduled match's red and blue alliance on the Matches tab and in the
 Predicted-matches chart. Click a point to open the first team of the pair.""",
-    "partners": """MATCHES & ALLIANCES — PARTNERS FOR MY TEAM
+    "partners": """MATCHES & ALLIANCES - PARTNERS FOR MY TEAM
 
 Each point is one possible partner for your team (set on the Setup tab). Axis choices are the
 same as for all alliances, plus the partner's own rating and team number.
 
 Default view: the partner's rating (X) against the pairing's win rate (Y), sized by the margin
-over the closest opponent — the top-right dots are the partners to talk to first. Gold = the
+over the closest opponent - the top-right dots are the partners to talk to first. Gold = the
 pairing out-scores every alliance it could face. Click a point to open that partner.""",
 }
 
@@ -8372,7 +8373,7 @@ def _key_by_label(vars_: list) -> dict:
     return {lab: k for k, lab, _ in vars_}
 
 
-#: Axis-key pairs (either order) that plot Total CAP against a win-rate-shaped statistic —
+#: Axis-key pairs (either order) that plot Total CAP against a win-rate-shaped statistic -
 #: when picked, the alliances/partners chart overlays the fitted StrengthFit curve.
 STRENGTH_CURVE_KEYS = ({"total", "win_rate"}, {"total", "alliance_strength"})
 
@@ -8446,8 +8447,8 @@ def team_match_rows(session: Session, team: int) -> list[tuple[MyMatch, Optional
 
 
 def team_all_match_rows(session: Session, team: int) -> list[tuple[str, MyMatch, Optional[float], Prediction, Match]]:
-    """A team's matches across every event loaded this season — earlier events, then this
-    one — oldest first, each with the EPA it carried into that match. Needs the meet loaded
+    """A team's matches across every event loaded this season - earlier events, then this
+    one - oldest first, each with the EPA it carried into that match. Needs the meet loaded
     "with history" (`session.epa_earlier`); without it, this is just this event's matches."""
     prior = getattr(session, "epa_earlier", None) or []
     rows = build_epa_history(prior, session.matches, session.event_code, session.settings)
@@ -8477,7 +8478,7 @@ def team_all_match_rows(session: Session, team: int) -> list[tuple[str, MyMatch,
 # One team's chart + the "edit data inputs" block
 # --------------------------------------------------------------------------- #
 OVERRIDE_FIELDS = [("opr", "OPR"), ("auto", "Auto"), ("teleop", "Teleop"),
-                   ("endgame", "Endgame"), ("proj_opr", "Proj OPR"), ("epa", "EPA")]
+                   ("endgame", "Endgame"), ("proj_opr", "Projected OPR"), ("epa", "EPA")]
 
 
 class TeamChartPanel(ttk.Frame):
@@ -8611,7 +8612,7 @@ class TeamChartPanel(ttk.Frame):
             if val is not None:
                 changed.append(label)
         self.edit_status.set("Using your values for " + ", ".join(changed) + "." if changed
-                             else "No overrides — all values come from FTCScout.")
+                             else "No overrides - all values come from FTCScout.")
         self.app.recompute()
         self.app.select_team(self.team, source=self)
 
@@ -8648,7 +8649,7 @@ class TeamChartPanel(ttk.Frame):
             self.preset_ratings(refresh=False)
         else:
             self.y_vars[0].set("EPA before the match")
-            self.y_vars[1].set("Predicted points, my alliance")
+            self.y_vars[1].set("Pred. points, my alliance")
             self.y_vars[2].set("Actual points, my alliance (np)")
         self.refresh()
 
@@ -8706,7 +8707,7 @@ class TeamChartPanel(ttk.Frame):
                 self._editing -= 1
             return
         edited = " · edited" if getattr(t, "edited", False) else ""
-        self.head_var.set(f"Team {t.number} {t.name}".strip() + f" — OPR {f1(t.opr)} · CAP {f1(t.cap)} · EPA {f1(t.epa)}{edited}")
+        self.head_var.set(f"Team {t.number} {t.name}".strip() + f" - OPR {f1(t.opr)} · CAP {f1(t.cap)} · EPA {f1(t.epa)}{edited}")
         self._fill_editor()
         kind = self._domain_kind()
         self.explain_var.set(EXPLAIN_SHORT[kind])
@@ -8792,7 +8793,7 @@ class TeamChartPanel(ttk.Frame):
 # --------------------------------------------------------------------------- #
 class ChartsTab(Tab):
     """Charts: one team over time, every team at once (where OPR, CAP and EPA agree
-    or disagree), and the schedule's matches or the possible alliance pairings —
+    or disagree), and the schedule's matches or the possible alliance pairings -
     each with pickable axes and a third variable as marker size and colour."""
 
     title = "Charts"
@@ -9042,7 +9043,7 @@ class ChartsTab(Tab):
             dropped = len(teams) - len(order)
             shown = (f"All {len(order)} teams" if not dropped
                      else f"{len(order)} of {len(teams)} teams ({dropped} have no {self.ax_var.get()})")
-            self.all_chart.set_data(f"{shown}, weakest → strongest by {self.ax_var.get()} — "
+            self.all_chart.set_data(f"{shown}, weakest → strongest by {self.ax_var.get()} - "
                                     f"one line per rating; where the lines meet, the ratings agree",
                                     f"Teams (ordered by {self.ax_var.get()})", "Points", series, x_ticks=ticks)
             spreads = sorted((hi - lo, n) for _x, lo, hi, n in bars)
@@ -9076,7 +9077,7 @@ class ChartsTab(Tab):
             hi = max(max(p.x for p in pts), max(p.y for p in pts))
             series.append(ChartSeries("x = y (the two agree)", [ChartPoint(lo, lo), ChartPoint(hi, hi)],
                                       "#b8bfcc", kind="line", dashed=True, markers=False))
-        self.all_chart.set_data(f"{len(pts)} teams — {self.ay_var.get()} against {self.ax_var.get()}",
+        self.all_chart.set_data(f"{len(pts)} teams - {self.ay_var.get()} against {self.ax_var.get()}",
                                 self.ax_var.get(), self.ay_var.get(), series,
                                 z_label=self.az_var.get() if zf else "")
         self.all_status.set("Points near the dashed x = y line are teams the two statistics agree on; the further "
@@ -9110,8 +9111,8 @@ class ChartsTab(Tab):
                         color = UI_GOLD_DEEP
                 pts.append(ChartPoint(x, y, label=m.label, z=z, key=m.label, color=color,
                                       text=f"{m.label}: red {m.red} vs blue {m.blue}\npred {p.winner} {p.red_pts:.0f}-{p.blue_pts:.0f} "
-                                           f"(COW {p.red_cow:.0%})" + (f"\nactual {m.winner} {m.red_score:.0f}-{m.blue_score:.0f}" if m.winner else "")))
-            title = f"{len(pts)} matches — {self.py_var.get()} against {self.px_var.get()}"
+                                           f"(Win chance {p.red_cow:.0%})" + (f"\nactual {m.winner} {m.red_score:.0f}-{m.blue_score:.0f}" if m.winner else "")))
+            title = f"{len(pts)} matches - {self.py_var.get()} against {self.px_var.get()}"
             self.pair_status.set("Green = called correctly, red = called wrong, gold = my team's match, plain = not played yet "
                                  "(colours give way to the Z variable when one is chosen). Click a point to open the match.")
         else:
@@ -9139,7 +9140,7 @@ class ChartsTab(Tab):
                 self.pair_status.set("Each point is one possible partner for your team. Gold = the pair would beat every alliance "
                                      "it could face. Click a point to open the partner on the Teams tab.")
             else:
-                title = f"Top {len(pts)} of {len(rep.table)} possible alliances — {self.py_var.get()} against {self.px_var.get()}"
+                title = f"Top {len(pts)} of {len(rep.table)} possible alliances - {self.py_var.get()} against {self.px_var.get()}"
                 self.pair_status.set("Each point is one two-team alliance. Gold = beats every alliance it could face; blue = includes "
                                      "my team. Click a point to open its first team.")
         series = [ChartSeries("", pts, CHART_COLORS[0], labels=self.plabel_var.get())]
@@ -9209,7 +9210,7 @@ class AllianceWinRateTab(Tab):
         rating = s.settings.basis
         alliances = alliance_table(s.teams)
         fit = s.strength_fit
-        self.heading.set(f"{s.event_name} — alliance win rate vs total {rating}")
+        self.heading.set(f"{s.event_name} - alliance win rate vs total {rating}")
         if fit is None or len(alliances) < 8:
             self.summary.set(
                 f"Rating: {rating}. Not enough distinct legal alliance data to fit a curve "
@@ -9254,15 +9255,15 @@ The Charts tab turns the numbers on the other tabs into pictures. Every chart ha
 the same controls: pick what goes on each axis from the drop-downs, hover a point
 to read its details, click a point to jump to that team (or match), and press
 "Save image…" to write the chart to a PostScript file you can open or print.
-Nothing here changes the predictions — except the "Edit this team's data inputs"
+Nothing here changes the predictions - except the "Edit this team's data inputs"
 block on the One team page, which does, on purpose.
 
 Load a meet on the Setup tab first (with "fetch history" ticked, so each team's
 earlier events are available). The charts fill in automatically and repaint
-whenever the data changes: new results, a T.D.C. adjustment, a settings change.
+whenever the data changes: new results, a Technical issues adjustment, a settings change.
 
 
-PAGE 1 — ONE TEAM
+PAGE 1 - ONE TEAM
 
 What it is for: seeing how one robot has been trending, and whether OPR, CAP and
 EPA tell the same story about it.
@@ -9272,7 +9273,7 @@ EPA tell the same story about it.
 2. "Chart" chooses the time axis:
      Events this season      one point per event the team has played, oldest first.
      Matches at this event   one point per match on this meet's schedule.
-     All matches this season one point per match the team has played this season —
+     All matches this season one point per match the team has played this season -
                               every earlier event's matches, then this one, strung
                               together in the order they were played. (Needs the
                               meet loaded "with history"; otherwise it's the same
@@ -9282,11 +9283,11 @@ EPA tell the same story about it.
      Match (in order) / Match number       for the match view
      Match (in order played)               for the all-matches view
 4. "Y axis" is the main line; "Y2 (optional)" and "Y3 (optional)" add up to two
-   more lines on the same chart (choose "— none —" to leave one out). Season-view
+   more lines on the same chart (choose "- none -" to leave one out). Season-view
    choices include:
      OPR (non-penalty)             the team's OPR at that event
      CAP (as of that event)        what CAP would have said with only the events
-                                   played up to then — so you can see whether CAP
+                                   played up to then - so you can see whether CAP
                                    would have called the team right at the time
      EPA (after that event)        the EPA rating once that event's matches were
                                    learned
@@ -9305,7 +9306,7 @@ EPA tell the same story about it.
 6. Reading it: lines that sit on top of each other mean the ratings agree; a line
    that pulls away shows a method reacting to something the others miss. In the
    match view, the gap between "Predicted points" and "Actual points" is the
-   error for each match — a steady gap means the team is consistently under- or
+   error for each match - a steady gap means the team is consistently under- or
    over-rated, a one-off spike is usually one bad match.
 
 Edit this team's data inputs (blank = value from FTCScout)
@@ -9319,17 +9320,17 @@ Edit this team's data inputs (blank = value from FTCScout)
    and their heading says "edited". "Reset to FTCScout" clears every override for
    that team.
    Overrides are saved in the session file, so they survive closing the program.
-   Use this when you know something FTCScout does not — a team that rebuilt its
+   Use this when you know something FTCScout does not - a team that rebuilt its
    robot, a broken mechanism you saw in the pits, or a rookie with no data yet.
 
 The same panel opens as a side menu on the Teams tab: select a row there and
 press "Show charts ▸".
 
 
-PAGE 2 — ALL TEAMS
+PAGE 2 - ALL TEAMS
 
 What it is for: comparing every team at the meet at once, and finding the teams
-where OPR, CAP and EPA disagree — those are the calls to double-check by eye.
+where OPR, CAP and EPA disagree - those are the calls to double-check by eye.
 
 "View" has two modes.
 
@@ -9338,9 +9339,9 @@ Scatter
    OPR, CAP, EPA, the prediction rating in use, Auto, Teleop, Endgame, AVG, NEW
    AVG, FTC AVG, Projected OPR, EOPR, the differences CAP − OPR, EPA − OPR and
    EPA − CAP, the rating spread, projected rank and RP, wins, events played,
-   matches EPA has learned from, rank at the source event, or the T.D.C. delta.
+   matches EPA has learned from, rank at the source event, or the Technical issues adjustment.
    "Z (size + colour)" adds a third number: bigger, more golden dots have a
-   higher value of it; small navy dots a lower one. "— none —" turns it off.
+   higher value of it; small navy dots a lower one. "- none -" turns it off.
    "Label points" writes the team number beside each dot.
    When both axes are ratings (for example CAP against OPR) a dashed "x = y" line
    is drawn: dots on the line are teams the two statistics agree on; the further
@@ -9360,7 +9361,7 @@ Compare ratings (where they converge)
    ticked rating is a line: OPR, CAP, EPA, NEW AVG, Projected OPR. Where the lines run together the methods agree
    and the prediction is on firm ground; where they split, at least one method is
    wrong about that team. The grey bars behind each team show the disagreement
-   (highest minus lowest of the ticked ratings) — "show disagreement bars" turns
+   (highest minus lowest of the ticked ratings) - "show disagreement bars" turns
    them off. The status line under the chart gives the median and widest
    disagreement in points.
 
@@ -9368,7 +9369,7 @@ Clicking a dot (or a point on a line) opens that team on the Teams tab with the
 side menu already showing it.
 
 
-PAGE 3 — MATCHES & ALLIANCES
+PAGE 3 - MATCHES & ALLIANCES
 
 What it is for: seeing which matches are close and which are lopsided, checking
 how the predictions did, and finding the strongest two-team pairings for alliance
@@ -9389,9 +9390,9 @@ Matches on the schedule
    Suggested views:
      X = Predicted red points, Y = Predicted blue points,
      Z = Predicted margin (absolute)
-         the default — dots near the diagonal are toss-ups, big gold dots are
+         the default - dots near the diagonal are toss-ups, big gold dots are
          blow-outs
-     X = Match number, Y = Closeness (50 − |COW − 50|)
+     X = Match number, Y = Closeness (50 − |Win chance − 50|)
          when in the day the tight matches fall
      X = Predicted margin (red − blue), Y = Actual margin (red − blue, np)
          how good the predictions were: a straight diagonal is perfect, dots in
@@ -9416,13 +9417,13 @@ All possible alliances
 Partners for my team
    Only the pairings that include your team (set it on the Setup tab). Default:
    each partner's own rating against the pair's win rate, sized by margin over
-   the closest opponent — the top-right dots are the partners to talk to first.
+   the closest opponent - the top-right dots are the partners to talk to first.
    Clicking a point opens that partner on the Teams tab.
 
 
 TIPS
 
-  * The rating the predictions use (CAP, OPR or EPA — Settings tab) is what
+  * The rating the predictions use (CAP, OPR or EPA - Settings tab) is what
     "Prediction rating (current basis)", the alliance totals and the match points
     are built from.
     Switch it on the Settings tab and every chart follows.
@@ -9430,7 +9431,7 @@ TIPS
     it keep learning during the meet (Settings tab) so the match-view EPA line
     moves.
   * Sheet-faithful mode (Settings) changes CAP and the projected OPR, so the
-    charts change with it — a quick way to see what the old spreadsheets would
+    charts change with it - a quick way to see what the old spreadsheets would
     have said.
   * Charts repaint on every "Refresh results", so during a meet the Matches page
     shows the day's accuracy building up.
@@ -9441,7 +9442,7 @@ TIPS
 
 
 class AnalysisTab(Tab):
-    """AutoScout.Analysis + Sheet18 — the post-mortem.
+    """AutoScout.Analysis + Sheet18 - the post-mortem.
 
     Running accuracy, the ±margin variant of the call, a per-wrong-match
     "lower blue by ≈ N points" suggestion, and the per-team verdict of
@@ -9604,7 +9605,7 @@ class LiveScoutingTab(Tab):
         self.match_box.pack(side="left", padx=(5, 14))
         self.match_box.bind("<<ComboboxSelected>>", lambda _e: self.refresh_notes())
         ttk.Label(row, text="Team").pack(side="left")
-        self.team_var = tk.StringVar(value="— alliance / general —")
+        self.team_var = tk.StringVar(value="- alliance / general -")
         self.team_box = ttk.Combobox(row, textvariable=self.team_var, state="readonly", width=22)
         self.team_box.pack(side="left", padx=5)
         ttk.Label(row, text="Phase").pack(side="left", padx=(8, 0))
@@ -9682,7 +9683,7 @@ class LiveScoutingTab(Tab):
         self.url_var.set(url)
         self.use_stream()
         win = tk.Toplevel(self)
-        win.title("AutoScout — Live video")
+        win.title("AutoScout - Live video")
         win.geometry("520x210")
         ttk.Label(win, text="YouTube live video", style="Card.TLabel").pack(anchor="w", padx=14, pady=(14, 4))
         ttk.Label(win, text="Playback runs in your browser; this detachable controller keeps the stream link handy.",
@@ -9705,7 +9706,7 @@ class LiveScoutingTab(Tab):
                 self.match_var.set(matches[0])
             elif not matches:
                 self.match_var.set("")
-            teams = ["— alliance / general —"] + [str(n) for n in sorted(s.teams)]
+            teams = ["- alliance / general -"] + [str(n) for n in sorted(s.teams)]
             self.team_box["values"] = teams
             if self.team_var.get() not in teams:
                 self.team_var.set(teams[0])
@@ -9731,7 +9732,7 @@ class LiveScoutingTab(Tab):
             return
         import datetime
         team = self.team_var.get()
-        if team == "— alliance / general —":
+        if team == "- alliance / general -":
             team = "General"
         note = {"time": datetime.datetime.now().strftime("%H:%M:%S"), "team": team,
                 "phase": self.phase_var.get(), "text": content}
@@ -9814,7 +9815,7 @@ class TeamResearchTab(Tab):
         ttk.Label(right, textvariable=self.profile_subtitle, foreground=UI_MUTED).pack(anchor="w", pady=(1, 7))
         metrics = ttk.Frame(right)
         metrics.pack(fill="x", pady=(0, 8))
-        self.metric_vars = [tk.StringVar(value="—") for _ in range(5)]
+        self.metric_vars = [tk.StringVar(value="-") for _ in range(5)]
         self.metric_labels = ["Events", "Matches", "Win rate", "Avg OPR", "Awards"]
         self.metric_cards = []
         for i, (label, var) in enumerate(zip(self.metric_labels, self.metric_vars)):
@@ -9878,7 +9879,7 @@ class TeamResearchTab(Tab):
             number = team.get("teamNumber", team.get("number", "?"))
             name = team.get("name", "Unnamed team")
             location = ", ".join(x for x in (team.get("city"), team.get("state")) if x)
-            self.team_list.insert("end", f"{number}  ·  {name}" + (f"  —  {location}" if location else ""))
+            self.team_list.insert("end", f"{number}  ·  {name}" + (f"  -  {location}" if location else ""))
         self.search_status.set(f"Found {len(self._team_results)} matching team(s). Select one and choose Load team.")
         if len(self._team_results) == 1:
             self.team_list.selection_set(0)
@@ -9948,7 +9949,7 @@ class TeamResearchTab(Tab):
         played = wins + losses + ties
         oprs = [float(((e.get("stats") or {}).get("opr") or {}).get("totalPointsNp",0) or 0) for e in events if isinstance(e,dict) and (e.get("stats") or {}).get("opr")]
         avg_opr = sum(oprs)/len(oprs) if oprs else None
-        vals = [str(len(events)), str(len(matches) or played), f"{wins/played:.0%}" if played else "—", f"{avg_opr:.1f}" if avg_opr is not None else "—", str(len(awards))]
+        vals = [str(len(events)), str(len(matches) or played), f"{wins/played:.0%}" if played else "-", f"{avg_opr:.1f}" if avg_opr is not None else "-", str(len(awards))]
         for var, value in zip(self.metric_vars, vals): var.set(value)
         for tree in (self.events_tree, self.awards_tree, self.matches_tree):
             for item in tree.get_children(): tree.delete(item)
@@ -9970,16 +9971,16 @@ class TeamResearchTab(Tab):
         for m in matches:
             if not isinstance(m, dict): continue
             match_obj = m.get("match") if isinstance(m.get("match"), dict) else m
-            event_code = m.get("eventCode") or match_obj.get("eventCode") or "—"
-            match_label = match_obj.get("name") or match_obj.get("matchName") or match_obj.get("matchNumber") or match_obj.get("id") or "—"
-            alliance = m.get("alliance") or m.get("color") or match_obj.get("alliance") or "—"
-            score = m.get("score", match_obj.get("score", "—"))
-            result = m.get("result") or ("Win" if m.get("isWinner") is True else "Loss" if m.get("isWinner") is False else "—")
+            event_code = m.get("eventCode") or match_obj.get("eventCode") or "-"
+            match_label = match_obj.get("name") or match_obj.get("matchName") or match_obj.get("matchNumber") or match_obj.get("id") or "-"
+            alliance = m.get("alliance") or m.get("color") or match_obj.get("alliance") or "-"
+            score = m.get("score", match_obj.get("score", "-"))
+            result = m.get("result") or ("Win" if m.get("isWinner") is True else "Loss" if m.get("isWinner") is False else "-")
             self.matches_tree.insert("", "end", values=(event_code, match_label, alliance, score, result))
         for a in awards:
             if not isinstance(a,dict): continue
             award = a.get("name") or a.get("awardName") or a.get("award") or "Award"
-            event = a.get("eventName") or a.get("eventCode") or a.get("event") or "—"
+            event = a.get("eventName") or a.get("eventCode") or a.get("event") or "-"
             season = a.get("season", data["season"])
             self.awards_tree.insert("", "end", values=(award,event,season))
         parsed.sort(key=lambda x: x[0])
@@ -10119,7 +10120,7 @@ class SettingsTab(Tab):
 
         a = ttk.LabelFrame(right, text="About", padding=8)
         a.pack(fill="x", pady=8)
-        ttk.Label(a, text=f"{APP_FULL_TITLE} {__version__} — {APP_TAGLINE}",
+        ttk.Label(a, text=f"{APP_FULL_TITLE} {__version__} - {APP_TAGLINE}",
                   font=self.app.font_bold).pack(anchor="w")
         ttk.Label(a, foreground="#666", justify="left", wraplength=430, text=(
             "A port of the eight AutoScout v1.3 spreadsheets. Data from the public "
@@ -10422,7 +10423,7 @@ def resolve_font_family(candidates: Sequence[str], fallback: str) -> str:
     """Pick the first installed font family from `candidates`, else `fallback`.
 
     Requires a Tk root to already exist. Roboto/IBM Plex Mono are optional
-    branding fonts — if the OS doesn't have them, this quietly falls back to
+    branding fonts - if the OS doesn't have them, this quietly falls back to
     Tk's default font rather than erroring.
     """
     try:
@@ -10437,7 +10438,7 @@ def resolve_font_family(candidates: Sequence[str], fallback: str) -> str:
 
 
 class Tooltip:
-    """A small hover hint — attach to any widget with a one-line explanation.
+    """A small hover hint - attach to any widget with a one-line explanation.
 
     Used sparingly, on the handful of controls whose purpose isn't obvious
     from the label alone (this is the low-learning-curve safety net, not a
@@ -10486,7 +10487,7 @@ class Tooltip:
 
 
 class Collapsible(ttk.Frame):
-    """A section that starts collapsed — progressive disclosure for anything
+    """A section that starts collapsed - progressive disclosure for anything
     a first-time user doesn't need to see (advanced/optional settings)."""
 
     def __init__(self, master, text: str, start_open: bool = False, **kw):
@@ -10745,7 +10746,7 @@ def apply_modern_style(root: tk.Tk, title_family: str, body_family: str) -> None
     root.option_add("*selectForeground", UI_SELECT_FG)
     root.option_add("*Text.inactiveSelectBackground", UI_SELECT_INACTIVE_BG)
 
-    # The Charts tab's inner page strip: the same folder tabs as the main navigation —
+    # The Charts tab's inner page strip: the same folder tabs as the main navigation -
     # inactive on the page grey, the active one lifted to white with navy text.
     style.configure("Charts.TNotebook", background=UI_PAGE_BG, borderwidth=0, tabmargins=(0, 4, 0, 0))
     style.configure("Charts.TNotebook.Tab", background=UI_TAB_BG, foreground=UI_TAB_FG,
@@ -10787,7 +10788,7 @@ class App(tk.Tk):
 
     def __init__(self, open_path: Optional[str] = None, autostart: bool = True):
         super().__init__()
-        self.title(f"{APP_FULL_TITLE} {__version__} — {APP_TAGLINE}")
+        self.title(f"{APP_FULL_TITLE} {__version__} - {APP_TAGLINE}")
         try:
             # kept as attributes so they aren't garbage-collected
             self._icon_imgs = [logo_image(s) for s in (16, 32, 48, 56)]
@@ -10828,7 +10829,7 @@ class App(tk.Tk):
         self.font_big = tkfont.Font(family=title_family, size=base.cget("size") + 6, weight="bold")
         self.font_tagline = tkfont.Font(family=body_family, size=base.cget("size"), weight="bold")
 
-        # Section/tab headings ("titles" in this app's own vocabulary — see
+        # Section/tab headings ("titles" in this app's own vocabulary - see
         # the Tab.title attribute) also get the title font.
         apply_modern_style(self, title_family, body_family)
 
@@ -10950,7 +10951,7 @@ class App(tk.Tk):
             tab.refresh()
         s = self.session
         name = s.event_name if s.loaded or s.event_code else "no meet loaded"
-        self.title(f"{APP_FULL_TITLE} {__version__} — {name}" + (f" — {os.path.basename(s.path)}" if s.path else ""))
+        self.title(f"{APP_FULL_TITLE} {__version__} - {name}" + (f" - {os.path.basename(s.path)}" if s.path else ""))
         c, d = s.accuracy()
         self.status.set(f"{len(s.teams)} teams · {len(s.matches)} matches · accuracy {c}/{d}"
                         + (f" = {c / d:.0%}" if d else "") + f" · by {s.settings.basis}"
@@ -11064,7 +11065,7 @@ class App(tk.Tk):
 
     def show_about(self) -> None:
         messagebox.showinfo(f"About {APP_FULL_TITLE}", (
-            f"{APP_FULL_TITLE} {__version__} — {APP_TAGLINE}\n\n"
+            f"{APP_FULL_TITLE} {__version__} - {APP_TAGLINE}\n\n"
             f"{APP_BLURB}\n\n"
             "A port of the AutoScout v1.3 spreadsheets. Data from the public "
             "FTCScout REST API.\n\n"
@@ -11377,24 +11378,24 @@ def fmt_team(t) -> str:
 
 
 def cmd_teams(s: Session, a):
-    print(f"{s.event_name} ({s.season}/{s.event_code}) — {len(s.teams)} teams, ranked by {s.settings.basis}")
+    print(f"{s.event_name} ({s.season}/{s.event_code}) - {len(s.teams)} teams, ranked by {s.settings.basis}")
     for i, t in enumerate(s.teams_by_strength(), 1):
         print(f"{i:3d}. {fmt_team(t)}")
 
 
 def cmd_predict(s: Session, a):
     c, d = s.accuracy()
-    print(f"{s.event_name} — {len(s.predictions)} matches, predictions by {s.settings.basis}; accuracy so far {c}/{d}" + (f" = {c/d:.0%}" if d else ""))
+    print(f"{s.event_name} - {len(s.predictions)} matches, predictions by {s.settings.basis}; accuracy so far {c}/{d}" + (f" = {c/d:.0%}" if d else ""))
     for p in s.predictions:
         m = p.match
-        act = f"{m.winner:4s} {m.red_score:.0f}-{m.blue_score:.0f}" if m.winner else "—"
+        act = f"{m.winner:4s} {m.red_score:.0f}-{m.blue_score:.0f}" if m.winner else "-"
         ok = "" if p.correct is None else ("✔" if p.correct else "✘")
         print(f"{m.label:6s} R {m.red[0]:5d} {m.red[1] if len(m.red) > 1 else '':5} vs B {m.blue[0]:5d} {m.blue[1] if len(m.blue) > 1 else '':5}"
-              f"  pred {p.winner:4s} {p.red_pts:6.1f}-{p.blue_pts:6.1f} COW {p.red_cow:4.0%}/{p.blue_cow:4.0%}  actual {act} {ok}")
+              f"  pred. {p.winner:4s} {p.red_pts:6.1f}-{p.blue_pts:6.1f} Win chance {p.red_cow:4.0%}/{p.blue_cow:4.0%}  actual {act} {ok}")
 
 
 def cmd_standings(s: Session, a):
-    print(f"{s.event_name} — projected standings (RP, then AUTO, then ENDGAME)")
+    print(f"{s.event_name} - projected standings (RP, then AUTO, then ENDGAME)")
     for r in s.table:
         cap = "  ← captain" if r.captain_rank else ""
         print(f"{r.rank:3d}. {r.number:6d} {r.name[:22]:22s} {r.wins}-{r.losses} of {r.scheduled}  RP {r.rp:.2f}  TBP1 {r.tbp1:6.1f} TBP2 {r.tbp2:5.1f}{cap}")
@@ -11407,7 +11408,7 @@ def cmd_myteam(s: Session, a):
     t = info["stats"]
     if t is None:
         sys.exit(f"Team {s.my_team} is not at this event.")
-    print(f"Team {t.number} {t.name}  — {s.event_name}")
+    print(f"Team {t.number} {t.name}  - {s.event_name}")
     print(f"  OPR {t.opr:.2f}  Auto {t.auto:.2f}  Teleop {t.teleop:.2f}  Endgame {t.endgame:.2f}")
     pct = t.cap_change_pct
     print(f"  CAP {t.cap:.2f}  ({abs(pct):.1%} {'DECREASE' if pct and pct < 0 else 'INCREASE'} from OPR)" if pct is not None else f"  CAP {t.cap:.2f}")
@@ -11416,17 +11417,17 @@ def cmd_myteam(s: Session, a):
     print(f"  projected rank {info['rank']}  predicted wins {info['wins']}/{len(info['matches'])}  old RP {info['old_rp']}")
     for x in info["matches"]:
         m = x.prediction.match
-        print(f"  {m.label:6s} {x.color:4s} with {x.partner} vs {x.opponents}  COW {x.cow:4.0%}  MR {x.rating}  "
-              f"pred {'Win' if x.predicted_win else 'Loss'}  actual {x.actual or '—'}")
+        print(f"  {m.label:6s} {x.color:4s} with {x.partner} vs {x.opponents}  Win chance {x.cow:4.0%}  MR {x.rating}  "
+              f"pred. {'Win' if x.predicted_win else 'Loss'}  actual {x.actual or '-'}")
 
 
 def cmd_alliances(s: Session, a):
     rep = s.alliance_report()
     lab = s.settings.basis
-    print(f"{s.event_name} — {len(s.teams)} teams, {len(rep.table)} possible alliances (by {lab}); "
+    print(f"{s.event_name} - {len(s.teams)} teams, {len(rep.table)} possible alliances (by {lab}); "
           f"{len(rep.unbeatable)} beat every alliance they could face")
     if rep.bar is not None:
-        print(f"Team {rep.my_team}: rank {rep.my_rank}, {lab} {rep.my_cap:.2f} — "
+        print(f"Team {rep.my_team}: rank {rep.my_rank}, {lab} {rep.my_cap:.2f} - "
               f"pick must be above {rep.bar:.2f}")
     if rep.seats:
         print("  alliance captains")
@@ -11439,7 +11440,7 @@ def cmd_alliances(s: Session, a):
         flag = "  ← unbeatable" if x.unbeatable else ""
         print(f"  {x.rank:3d}. {x.label:15s} {lab} {x.cap_sum:6.1f}  beats {x.beats:4d}/{x.legal:<4d} "
               f"{x.win_rate:6.1%}  closest {' + '.join(str(n) for n in x.closest):15s} "
-              f"{x.margin:+6.1f}  COW {x.cow:4.0%}{flag}")
+              f"{x.margin:+6.1f}  Win chance {x.cow:4.0%}{flag}")
     if len(rep.table) > PRINTED_ALLIANCES:
         print(f"  … and {len(rep.table) - PRINTED_ALLIANCES} more")
     if rep.partners:
@@ -11448,7 +11449,7 @@ def cmd_alliances(s: Session, a):
             flag = "  ← unbeatable" if x.unbeatable else ""
             print(f"  {x.partner_of(rep.my_team):6d} {x.partner_name(rep.my_team)[:22]:22s} "
                   f"their {lab} {x.partner_cap(rep.my_team):6.1f}  total {x.cap_sum:6.1f}  "
-                  f"beats {x.beats:4d}/{x.legal:<4d} {x.win_rate:6.1%}  COW {x.cow:4.0%}{flag}")
+                  f"beats {x.beats:4d}/{x.legal:<4d} {x.win_rate:6.1%}  Win chance {x.cow:4.0%}{flag}")
 
 
 def cmd_load(s: Session, a):
@@ -11461,7 +11462,7 @@ def cmd_load(s: Session, a):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="autoscout",
-        description=f"{APP_FULL_TITLE} {__version__} — {APP_TAGLINE}. FTC match predictions. {APP_WEBSITE}")
+        description=f"{APP_FULL_TITLE} {__version__} - {APP_TAGLINE}. FTC match predictions. {APP_WEBSITE}")
     ap.add_argument("command", choices=["load", "teams", "predict", "standings", "myteam", "alliances", "gui"],
                     nargs="?", default="gui")
     ap.add_argument("--season", type=int, default=2025)

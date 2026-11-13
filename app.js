@@ -49,7 +49,7 @@ function select(options, value, onchange) {
 function textInput(value, attrs = {}) { return h("input", { type: "text", value: value ?? "", ...attrs }); }
 function metricsRow(list) {
   return h("div", { class: "metrics" }, list.map((m) => h("div", { class: "metric" },
-    h("div", { class: "lab", text: m.label }), h("div", { class: "val", text: m.value || "—" }))));
+    h("div", { class: "lab", text: m.label }), h("div", { class: "val", text: m.value || "-" }))));
 }
 function hero(kicker, title, sub) {
   return h("div", { class: "hero" }, h("div", { class: "kicker", text: kicker }), h("h2", { text: title }), sub ? h("p", { text: sub }) : null);
@@ -220,7 +220,7 @@ async function rerender() { await render(); }
 // ---------------------------------------------------------------------------
 function sortKey(v) {
   const s = String(v ?? "").trim().replace(/%/g, "").replace(/\+/g, "");
-  if (s === "" || s === "n/a" || s === "—") return [2, 0, ""];
+  if (s === "" || s === "n/a" || s === "-") return [2, 0, ""];
   const n = Number(s.replace("−", "-"));
   if (s !== "" && !Number.isNaN(n)) return [0, n, ""];
   return [1, 0, s.toLowerCase()];
@@ -626,7 +626,7 @@ RENDER.overview = async () => {
     ["04", "Make a strategy call", "Compare alliances and validate predictions against real results."]];
   return [
     hero("COMPETITION COMMAND CENTER", "Scout smarter. Pick stronger alliances.",
-      "Your match data, team intelligence, and strategy tools — together in one workspace."),
+      "Your match data, team intelligence, and strategy tools all in one workspace."),
     metricsRow(d.metrics),
     h("div", { class: "grid-even" },
       card("Quick actions", h("div", { class: "actions" },
@@ -659,7 +659,7 @@ RENDER.competition = async (params) => {
       onclick: () => { S.comp.match = label; rerender(); } },
     h("span", { class: "lab", text: label }),
     h("span", { class: "teams" }, h("span", { class: "side r", text: red }), h("span", { class: "side b", text: blue })),
-    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "—" }), chip)));
+    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }), chip)));
   }
   if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate your match desk." }));
   afterRender.push(() => {          // scroll the list itself, not the page
@@ -776,7 +776,7 @@ RENDER.setup = async () => {
       searchStatus, results,
       h("details", { class: "adv" }, h("summary", { text: "Advanced options" }), h("div", null,
         field("Extra team numbers (optional)", extra),
-        check("Offline (cache only — never touch the network)", offline, (v) => { offline = v; }),
+        check("Offline (cache only - never touch the network)", offline, (v) => { offline = v; }),
         check("Fetch each team's season history (needed for projected OPR)", history, (v) => { history = v; }))),
       h("div", { class: "row", style: { marginTop: "14px" } },
         h("div", { class: "progress", id: "setupProgress" }, h("div", { style: { width: (loadUI.frac * 100).toFixed(0) + "%" } }))),
@@ -790,7 +790,7 @@ RENDER.setup = async () => {
       h("p", { class: "note", text: "Session files are the same .json the desktop app opens and saves, so you can move a session between the desktop app, this site and other phones." })),
     card("Paste schedule (used when FTCScout has no schedule)",
       h("pre", { class: "muted small", style: { margin: "0 0 8px", whiteSpace: "pre-wrap" }, text:
-        "One match per line — the first two team numbers are red, the next two blue.\n    Q-1  11225 19013  19564 23213\n    1    11225 19013 vs 19564 23213   104-66\nA trailing red-blue score marks the match as played." }),
+        "One match per line - the first two team numbers are red, the next two blue.\n    Q-1  11225 19013  19564 23213\n    1    11225 19013 vs 19564 23213   104-66\nA trailing red-blue score marks the match as played." }),
       schedule,
       h("div", { class: "row" }, btn("Use pasted schedule", async () => { const r = await runAction("schedule", { season: season.value, team: team.value, extra: extra.value, schedule: schedule.value }); if (r.ok) rerender(); }))),
     card("Loaded event", h("div", { class: "pre", text: d.info })),
@@ -824,7 +824,7 @@ function openTeamSheet(d) {
   let closeIt = null;
   const back = () => { if (closeIt) closeIt(); };
   closeIt = modal((close) => {
-    const tdc = select(S.boot.tdc_issues.map((x) => [x, x || "— none —"]), e.tdc, () => apply());
+    const tdc = select(S.boot.tdc_issues.map((x) => [x, x || "- none -"]), e.tdc, () => apply());
     const delta = h("input", { type: "number", value: e.delta, step: "any", inputmode: "decimal" });
     const focus = select(S.boot.focus_modes, e.focus, () => apply());
     const note = textInput(e.note, { placeholder: "Pit notes, robot issues…" });
@@ -843,8 +843,8 @@ function openTeamSheet(d) {
     return [
       h("button", { class: "btn small close", onclick: close, "aria-label": "Close" }, "✕"),
       h("h2", { text: e.title }),
-      h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (T.D.C. + Team Focus)" }),
-        h("div", { class: "form" }, field("T.D.C. issue", tdc), field("Delta", delta), field("Focus", focus), field("Note", note, "wide")),
+      h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (Technical Issues + Team Focus)" }),
+        h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Note", note, "wide")),
         h("div", { class: "row" }, btn("Apply", apply, "primary"))),
       panelBox,
     ];
@@ -977,7 +977,7 @@ function resultDialog(label, vals, cols) {
   modal((close) => {
     const ok = async () => { close(); const r = await runAction("result", { label, red: red.value, blue: blue.value }); if (r.ok) rerender(); };
     [red, blue].forEach((el) => el.addEventListener("keydown", (e) => { if (e.key === "Enter") ok(); }));
-    return [h("h2", { text: `Result — ${label}` }),
+    return [h("h2", { text: `Result - ${label}` }),
       h("div", { class: "form" }, field(`Red ${[get("r1"), get("r2")].filter(Boolean).join(" + ")}`, red),
         field(`Blue ${[get("b1"), get("b2")].filter(Boolean).join(" + ")}`, blue)),
       h("div", { class: "foot" },
@@ -1201,7 +1201,7 @@ RENDER.settings = async () => {
     card("Predictions are based on",
       h("div", { class: "row" }, h("div", { class: "seg", role: "radiogroup" }, [["CAP", "CAP (AutoScout's own rating)"], ["OPR", "OPR (non-penalty)"], ["EPA", "EPA (learns match by match)"]].map(([k, lab]) =>
         h("button", { type: "button", class: d.rating === k ? "on" : "", role: "radio", "aria-checked": d.rating === k ? "true" : "false", onclick: () => apply({ rating: k }) }, lab))),
-      btn("What are CAP, OPR and EPA?", () => infoDialog("CAP, OPR and EPA", S.boot.cap_help), "small")),
+      btn("What do CAP, OPR and EPA mean?", () => infoDialog("CAP, OPR and EPA", S.boot.cap_help), "small")),
       h("p", { class: "note", text: "The per-team number that is added up for each alliance: it drives the match predictions, the accuracy count, projected standings and every alliance table." }),
       h("div", { class: "row" }, check("EPA keeps learning from this event's played matches", d.epa_live, (v) => apply({ epa_live: v })),
         h("span", { text: "k max ×mean" }), k0, h("span", { text: "k min ×mean" }), kmin),
@@ -1220,13 +1220,13 @@ RENDER.settings = async () => {
       card("Cache",
         h("p", { class: "muted", text: d.cache_count == null ? "FTCScout responses are cached in this browser." : `${d.cache_count} FTCScout responses cached in this browser.` }),
         h("div", { class: "row" }, btn("Clear cache", async () => { await runAction("clear_cache", {}); rerender(); }),
-          check("Offline (cache only — never touch the network)", d.offline, async (v) => { await runAction("offline", { offline: v }, false); toast(v ? "Offline: only cached data is used." : "Online."); })),
+          check("Offline (cache only - never touch the network)", d.offline, async (v) => { await runAction("offline", { offline: v }, false); toast(v ? "Offline: only cached data is used." : "Online."); })),
         h("p", { class: "note", text: "Sessions and the cache live in this browser's storage. On iPhone, add the site to your home screen so Safari keeps them, and download session files as a backup." })),
       card("About",
         h("b", { text: d.about.title }), h("p", { class: "muted", text: d.about.blurb, style: { marginTop: "6px" } }),
         h("p", { class: "muted small" }, d.about.org, "  ·  ", h("a", { href: d.about.website, target: "_blank", rel: "noopener" }, "AutoScout website")),
         h("p", { class: "muted small", text: `Web version: the desktop AutoScout ${S.boot.version} engine running in your browser (Pyodide). Data from the public FTCScout API; no account or key needed.` }),
-        h("div", { class: "row" }, btn("What is CAP?", () => infoDialog("CAP, OPR and EPA", S.boot.cap_help), "small")))),
+        h("div", { class: "row" }, btn("What does CAP mean?", () => infoDialog("CAP, OPR and EPA", S.boot.cap_help), "small")))),
   ];
 };
 

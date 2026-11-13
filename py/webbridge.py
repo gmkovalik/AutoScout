@@ -446,7 +446,7 @@ def _team_panel(team: int, o: dict) -> dict:
     x_vars = {"events": A.EVENT_X_VARS, "matches": A.MATCH_X_VARS, "all_matches": A.ALL_MATCH_X_VARS}[kind]
     y_labels = A.EVENT_Y_LABELS if kind == "events" else A.MATCH_Y_LABELS
     defaults = (["OPR (non-penalty)", "CAP (as of that event)", "EPA (after that event)"] if kind == "events"
-                else ["EPA before the match", "Predicted points, my alliance", "Actual points, my alliance (np)"])
+                else ["EPA before the match", "Pred. points, my alliance", "Actual points, my alliance (np)"])
     xs = [lab for lab, _ in x_vars]
     x = o.get("x") if o.get("x") in xs else xs[0]
     ys = list(o.get("y") or defaults)[:3]
@@ -574,7 +574,7 @@ def view_live(o):
     match = o.get("match") if o.get("match") in labels else (labels[0] if labels else "")
     default_query = " ".join(x for x in (str(s.season), s.event_name, s.event_code, "FTC robotics") if x)
     notes = s.live_notes.get(match, []) if match else []
-    return {"matches": labels, "match": match, "teams": ["— alliance / general —"] + [str(n) for n in sorted(s.teams)],
+    return {"matches": labels, "match": match, "teams": ["- alliance / general -"] + [str(n) for n in sorted(s.teams)],
             "phases": ["Overall", "Autonomous", "TeleOp", "Endgame", "Between matches"],
             "notes": notes, "stream": s.live_stream_url, "query": default_query,
             "note_counts": {k: len(v) for k, v in s.live_notes.items() if v},
@@ -603,7 +603,7 @@ def view_settings(o):
             "tristate": list(A.TRISTATE), "mpt": p.mpt_var.get(), "margin": p.margin_var.get(),
             "poa": bool(p.poa_var.get()), "cache_count": n_cache,
             "offline": bool(A.config.get("offline", False)),
-            "about": {"title": f"{A.APP_FULL_TITLE} {A.__version__} — {A.APP_TAGLINE}",
+            "about": {"title": f"{A.APP_FULL_TITLE} {A.__version__} - {A.APP_TAGLINE}",
                       "blurb": A.APP_BLURB, "org": A.APP_ORG_FULL, "website": A.APP_WEBSITE}}
 
 
@@ -727,7 +727,7 @@ def act_refresh(a):
         return {"ok": True, "message": f"Offline: showing cached results ({played} matches played)."}
     if client.last_error:
         return {"ok": True, "message": f"Could not reach FTCScout, so these are the cached results ({played} matches played)."}
-    return {"ok": True, "message": f"Refreshed — {played} matches played."}
+    return {"ok": True, "message": f"Refreshed - {played} matches played."}
 
 
 def act_team_edit(a):
@@ -805,7 +805,7 @@ def act_note_add(a):
     if not text:
         return {"ok": False, "message": "Enter an observation first."}
     team = a.get("team") or "General"
-    if team == "— alliance / general —":
+    if team == "- alliance / general -":
         team = "General"
     import datetime
     s.live_notes.setdefault(label, []).append({"time": datetime.datetime.now().strftime("%H:%M:%S"),
@@ -860,7 +860,7 @@ def act_research_search(a):
         number = team.get("teamNumber", team.get("number", "?"))
         name = team.get("name", "Unnamed team")
         location = ", ".join(x for x in (team.get("city"), team.get("state")) if x)
-        out.append({"number": number, "text": f"{number}  ·  {name}" + (f"  —  {location}" if location else "")})
+        out.append({"number": number, "text": f"{number}  ·  {name}" + (f"  -  {location}" if location else "")})
     msg = (f"Found {total} matching teams; showing the first {len(out)}. Type more of the name to narrow it."
            if total > len(out) else f"Found {len(out)} matching team(s). Select one to load it.")
     return {"ok": True, "results": out, "message": msg}
