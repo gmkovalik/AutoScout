@@ -688,7 +688,7 @@ RENDER.setup = async () => {
   const season = h("input", { type: "number", value: d.season, min: 2019, max: 2100, inputmode: "numeric" });
   const team = h("input", { type: "number", value: d.team, inputmode: "numeric", placeholder: "e.g. 12928" });
   const extra = textInput(d.extra, { placeholder: "e.g. 11225 19013" });
-  const search = h("input", { type: "search", value: S.eventSearch.query, placeholder: "Search by meet name, city, or event code", autocomplete: "off" });
+  const search = h("input", { type: "search", value: S.eventSearch.query, placeholder: "Search by meet name or event code", autocomplete: "off" });
   const searchStatus = h("div", { class: "status", text: S.eventSearch.status || "Search FTCScout events for the selected season." });
   const results = h("div", { class: "switchlist event-results" });
   let offline = d.offline, history = true;
@@ -770,7 +770,7 @@ RENDER.setup = async () => {
   }
   return [
     card("Meet",
-      h("p", { class: "muted", text: "Find your competition by name, location, or event code. Choose a result to load it automatically." }),
+      h("p", { class: "muted", text: "Find your competition by meet name or event code. Choose a result to load it automatically." }),
       h("div", { class: "form" }, field("Season", season), field("My team number", team)),
       h("div", { class: "row", style: { marginTop: "10px" } }, field("Find a meet", search, "wide"), searchBtn),
       searchStatus, results,
