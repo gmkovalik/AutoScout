@@ -626,7 +626,7 @@ RENDER.overview = async () => {
     ["04", "Make a strategy call", "Compare alliances and validate predictions against real results."]];
   return [
     hero("COMPETITION COMMAND CENTER", "Scout smarter. Pick stronger alliances.",
-      "Your match data, team intelligence, and strategy tools — together in one workspace."),
+      "Your match data, team intelligence, and strategy tools all in one workspace."),
     metricsRow(d.metrics),
     h("div", { class: "grid-even" },
       card("Quick actions", h("div", { class: "actions" },
