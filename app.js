@@ -119,6 +119,7 @@ async function act(name, args, onProgress) {
 const S = {
   boot: null, head: null, page: "overview", params: {}, sort: {}, loading: false,
   comp: {}, panel: {}, all: {}, pairs: {}, chartsPage: "team", live: {}, research: { results: [], profile: null, season: "", query: "" },
+  eventSearch: { query: "", results: [], status: "" },
   auto: { on: false, minutes: 2, timer: null },
 };
 
@@ -685,17 +686,71 @@ RENDER.competition = async (params) => {
 RENDER.setup = async () => {
   const d = await view("setup");
   const season = h("input", { type: "number", value: d.season, min: 2019, max: 2100, inputmode: "numeric" });
-  const event = textInput(d.event, { placeholder: "e.g. FTCCMP1JACK", autocapitalize: "characters", autocomplete: "off", spellcheck: "false" });
   const team = h("input", { type: "number", value: d.team, inputmode: "numeric", placeholder: "e.g. 12928" });
   const extra = textInput(d.extra, { placeholder: "e.g. 11225 19013" });
+  const search = h("input", { type: "search", value: S.eventSearch.query, placeholder: "Search by meet name, city, or event code", autocomplete: "off" });
+  const searchStatus = h("div", { class: "status", text: S.eventSearch.status || "Search FTCScout events for the selected season." });
+  const results = h("div", { class: "switchlist event-results" });
   let offline = d.offline, history = true;
   const schedule = h("textarea", { rows: 7, spellcheck: "false", placeholder: "Q-1  11225 19013  19564 23213" });
   schedule.value = d.schedule || "";
   team.addEventListener("change", async () => { await runAction("my_team", { team: team.value }, false); });
-  const args = () => ({ season: season.value, event: event.value.trim().toUpperCase(), team: team.value, extra: extra.value,
+  season.addEventListener("change", () => {
+    S.eventSearch.results = [];
+    S.eventSearch.status = "Season changed. Search again to find events in this season.";
+    drawResults();
+    searchStatus.textContent = S.eventSearch.status;
+  });
+  search.addEventListener("input", () => {
+    S.eventSearch.query = search.value;
+    S.eventSearch.results = [];
+    S.eventSearch.status = "";
+    drawResults();
+    searchStatus.textContent = "Press Search meets to search again.";
+  });
+  const args = (code) => ({ season: season.value, event: code, team: team.value, extra: extra.value,
     offline, history, schedule: schedule.value });
-  const loadBtn = btn("Load event data", () => loadEvent(args()), "primary");
-  if (S.loading) loadBtn.disabled = true;
+  async function chooseEvent(ev) {
+    S.eventSearch.status = "Loading " + (ev.name || ev.code) + "…";
+    await loadEvent({ ...args(ev.code), season: ev.season || season.value });
+  }
+  function drawResults() {
+    results.textContent = "";
+    for (const ev of S.eventSearch.results) {
+      results.append(h("button", { type: "button", class: "event-result", onclick: () => chooseEvent(ev) },
+        h("span", null, h("b", { text: ev.name || ev.code }), h("small", { text: ev.code })),
+        h("span", { class: "event-load-label", text: "Load event →" })));
+    }
+    results.hidden = !S.eventSearch.results.length;
+  }
+  async function searchEvents() {
+    const query = search.value.trim();
+    S.eventSearch.query = query;
+    if (!query) {
+      S.eventSearch.status = "Enter a meet name, city, or event code to search.";
+      searchStatus.textContent = S.eventSearch.status;
+      return;
+    }
+    if (offline) {
+      S.eventSearch.status = "Event search needs an internet connection. Turn off Offline in Advanced options.";
+      searchStatus.textContent = S.eventSearch.status;
+      return;
+    }
+    searchStatus.textContent = "Searching FTCScout…";
+    const r = await runAction("events_search", { season: season.value, query: query }, false);
+    if (!r.ok) {
+      S.eventSearch.results = [];
+      S.eventSearch.status = r.message || "Could not search events.";
+    } else {
+      S.eventSearch.results = r.results || [];
+      S.eventSearch.status = r.message || (S.eventSearch.results.length ? "Select a meet to load it." : "No matching meets found.");
+    }
+    await rerender();
+  }
+  const searchBtn = btn("Search meets", searchEvents, "primary");
+  search.addEventListener("keydown", (e) => { if (e.key === "Enter") searchEvents(); });
+  drawResults();
+  searchStatus.textContent = S.eventSearch.status || "Search FTCScout events for the selected season.";
   const fileIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -708,23 +763,21 @@ RENDER.setup = async () => {
     const current = d.head.path === s.file;
     sessions.append(h("div", { class: "sess" + (current ? " current" : "") },
       h("div", { class: "info" }, h("b", { text: s.event || s.code }),
-        h("span", { class: "muted small", text: `${s.season}/${s.code} · ${s.teams} teams${s.my_team ? " · team " + s.my_team : ""} · saved ${s.saved}${current ? " · open now" : ""}` })),
+        h("span", { class: "muted small", text: s.season + "/" + s.code + " · " + s.teams + " teams" + (s.my_team ? " · team " + s.my_team : "") + " · saved " + s.saved + (current ? " · open now" : "") })),
       current ? null : btn("Open", async () => { const r = await runAction("open_saved", { file: s.file }); if (r.ok) rerender(); }, "small"),
-      btn("Delete", () => confirmDialog("Delete saved session?", `${s.event || s.code} will be removed from this browser. Download it first if you want a copy.`, "Delete",
+      btn("Delete", () => confirmDialog("Delete saved session?", (s.event || s.code) + " will be removed from this browser. Download it first if you want a copy.", "Delete",
         async () => { await runAction("delete_saved", { file: s.file }); rerender(); }), "small danger")));
   }
   return [
     card("Meet",
-      h("p", { class: "muted", text: "Enter your event details below, then press Load." }),
-      h("div", { class: "form" }, field("Season", season), field("Event code", event), field("My team number", team)),
-      h("p", { class: "note" }, "e.g. FTCCMP1JACK or USTXCLRM1. Find event codes on ",
-        h("a", { href: "https://ftcscout.org/events", target: "_blank", rel: "noopener" }, "ftcscout.org"), "."),
+      h("p", { class: "muted", text: "Find your competition by name, location, or event code. Choose a result to load it automatically." }),
+      h("div", { class: "form" }, field("Season", season), field("My team number", team)),
+      h("div", { class: "row", style: { marginTop: "10px" } }, field("Find a meet", search, "wide"), searchBtn),
+      searchStatus, results,
       h("details", { class: "adv" }, h("summary", { text: "Advanced options" }), h("div", null,
         field("Extra team numbers (optional)", extra),
         check("Offline (cache only — never touch the network)", offline, (v) => { offline = v; }),
         check("Fetch each team's season history (needed for projected OPR)", history, (v) => { history = v; }))),
-      h("div", { class: "row", style: { marginTop: "14px" } }, loadBtn,
-        h("div", { class: "progress", id: "setupProgress" }, h("div", { style: { width: (loadUI.frac * 100).toFixed(0) + "%" } }))),
       h("div", { class: "status", id: "setupStatus", text: S.loading ? loadUI.msg : "A big event takes a few minutes the first time: every team's season history is downloaded." })),
     card("Sessions saved in this browser", sessions,
       h("div", { class: "row", style: { marginTop: "12px" } }, fileIn,
@@ -732,12 +785,12 @@ RENDER.setup = async () => {
         btn("Download session file", () => exportFile("session"), ""),
         btn("New session", () => confirmDialog("Start a new session?", "The current session stays saved in this browser.", "New session",
           async () => { await runAction("new", {}, false); rerender(); }))),
-      h("p", { class: "note", text: "Session files are the same .json the desktop AutoScout opens and saves, so you can move a session between the desktop app, this site and other phones." })),
+      h("p", { class: "note", text: "Session files are the same .json the desktop app opens and saves, so you can move a session between the desktop app, this site and other phones." })),
     card("Paste schedule (used when FTCScout has no schedule)",
       h("pre", { class: "muted small", style: { margin: "0 0 8px", whiteSpace: "pre-wrap" }, text:
         "One match per line — the first two team numbers are red, the next two blue.\n    Q-1  11225 19013  19564 23213\n    1    11225 19013 vs 19564 23213   104-66\nA trailing red-blue score marks the match as played." }),
       schedule,
-      h("div", { class: "row" }, btn("Use pasted schedule", async () => { const r = await runAction("schedule", args()); if (r.ok) rerender(); }))),
+      h("div", { class: "row" }, btn("Use pasted schedule", async () => { const r = await runAction("schedule", { season: season.value, team: team.value, extra: extra.value, schedule: schedule.value }); if (r.ok) rerender(); }))),
     card("Loaded event", h("div", { class: "pre", text: d.info })),
   ];
 };
