@@ -82,3 +82,14 @@ Not tested yet: a real iPhone or Android phone (only the engines at phone size),
 ## Credits
 
 AutoScout is by LightSaders Robotics, FTC team 12928. The web version wraps the desktop app's own code; the engine and all of the statistics are unchanged.
+
+
+## Acronyms and terms
+
+- **FTC:** FIRST Tech Challenge.
+- **CAP:** Calculated Average Points, AutoScout's team rating.
+- **OPR:** Offensive Power Rating, a team's average scoring contribution before penalties.
+- **EPA:** Expected Points Added, a rating updated using match results.
+- **RP:** Ranking Points, used to rank teams in an event.
+- **COW:** Chance of Winning. The interface labels this as **Win chance** for clarity.
+- **Technical Issues:** The section for recording known robot issues and score adjustments. It was previously abbreviated as T.D.C.
