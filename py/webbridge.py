@@ -80,6 +80,30 @@ def _xhr_get(url: str, timeout: float) -> str:
     raise last or urllib.error.URLError("request failed")
 
 
+def _graphql(query: str) -> dict:
+    """Run a small FTCScout GraphQL query from the Pyodide worker."""
+    if js is None:
+        raise RuntimeError("Event search is available in the browser app only.")
+    url = "https://api.ftcscout.org/graphql"
+    req = js.XMLHttpRequest.new()
+    req.open("POST", url, False)
+    req.setRequestHeader("Accept", "application/json")
+    req.setRequestHeader("Content-Type", "application/json")
+    req.send(json.dumps({"query": query}))
+    status = int(req.status or 0)
+    body = str(req.responseText or "")
+    if status < 200 or status >= 300:
+        raise RuntimeError(f"FTCScout returned HTTP {status} while searching events.")
+    try:
+        payload = json.loads(body or "{}")
+    except ValueError as e:
+        raise RuntimeError("FTCScout returned an unreadable event-search response.") from e
+    if payload.get("errors"):
+        message = payload["errors"][0].get("message", "Unknown GraphQL error")
+        raise RuntimeError(f"FTCScout event search failed: {message}")
+    return payload.get("data") or {}
+
+
 def _pause(attempt: int) -> None:
     """Wait before a retry. (A plain loop: there is no event loop to yield to in a sync call.)"""
     if attempt < 2:
@@ -618,6 +642,33 @@ VIEWS = {"overview": view_overview, "competition": view_competition, "setup": vi
 # --------------------------------------------------------------------------- #
 
 
+def act_events_search(a):
+    """Search FTCScout events for a season and return selectable event codes."""
+    query = str(a.get("query", "")).strip()
+    season = A.as_int(str(a.get("season", "")), APP.session.season)
+    if len(query) < 2:
+        return {"ok": False, "message": "Enter at least two characters to search for a meet."}
+    if js is None:
+        return {"ok": False, "message": "Event search is available in the browser app only."}
+    gql = f"{{ eventsSearch(season: {int(season)}, searchText: {json.dumps(query)}) {{ name code }} }}"
+    try:
+        rows = _graphql(gql).get("eventsSearch") or []
+        seen = set()
+        results = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            code = str(row.get("code") or "").strip().upper()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            results.append({"name": str(row.get("name") or code), "code": code, "season": int(season)})
+        return {"ok": True, "results": results,
+                "message": f"Found {len(results)} matching meet(s)." if results else "No matching meets found for this season."}
+    except Exception as e:
+        return {"ok": False, "message": f"Could not search FTCScout: {e}"}
+
+
 def act_load(a):
     """Setup → Load event data (the desktop's SetupTab.do_load, run in this worker)."""
     p = probe(A.SetupTab, season_var=Rec(str(a.get("season", ""))), event_var=Rec(a.get("event", "")),
@@ -909,7 +960,7 @@ def act_export(a):
     return {"ok": False, "message": "Unknown export."}
 
 
-ACTIONS = {"load": act_load, "schedule": act_schedule, "my_team": act_my_team, "refresh": act_refresh,
+ACTIONS = {"load": act_load, "events_search": act_events_search, "schedule": act_schedule, "my_team": act_my_team, "refresh": act_refresh,
            "team_edit": act_team_edit, "overrides": act_overrides, "result": act_result,
            "settings": act_settings, "clear_cache": act_clear_cache, "offline": act_offline,
            "note_add": act_note_add, "note_delete": act_note_delete, "stream": act_stream,
