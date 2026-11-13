@@ -727,7 +727,7 @@ RENDER.setup = async () => {
     const query = search.value.trim();
     S.eventSearch.query = query;
     if (!query) {
-      S.eventSearch.status = "Enter a meet name, city, or event code to search.";
+      S.eventSearch.status = "Enter a meet name or event code to search.";
       searchStatus.textContent = S.eventSearch.status;
       return;
     }
