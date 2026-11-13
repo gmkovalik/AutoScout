@@ -34,7 +34,7 @@ _analysis = config = core = _SelfModule()
 # ==========================================================================
 """AutoScout - FTC match prediction, ported from the AutoScout v1.3 spreadsheets."""
 __version__ = "4.1.0"   # 2.2.3: per-meet alliance win-rate curve tab; 2.2.2: Alliance Strength (fitted win-rate curve, chart overlay + equation,
-                         #        per-match stat); COW/Alliance.cow now a calibrated Gaussian CDF
+                         #        per-match stat); Chance of Winning / alliance win chance now a calibrated Gaussian CDF
                          #        instead of a point share. 2.2.1: readable selection everywhere.
                          #        2.2: charts (Teams side menu, Charts tab) + editable data inputs
 APP_NAME = "AutoScout"
@@ -5506,7 +5506,7 @@ from typing import Optional
 
 
 CSV_TEAM_COLUMNS = ["Rank", "Team", "Name", "OPR", "Auto", "Teleop", "Endgame", "AVG", "NEW AVG",
-                    "Proj OPR", "Technical issue", "T.D.C. delta", "FTC AVG", "Focus", "CAP",
+                    "Proj OPR", "Technical issue", "Technical issues adjustment", "FTC AVG", "Focus", "CAP",
                     "CAP-OPR", "EPA", "Events", "Source event", "Record"]
 
 CSV_MATCH_COLUMNS = ["Match", "Red 1", "Red 2", "Blue 1", "Blue 2", "Red pts", "Blue pts",
@@ -6027,7 +6027,7 @@ from typing import Optional, Callable
 
 @dataclass
 class ManualTeam:
-    """Per-team inputs the user controls (T.D.C. sheet + AutoSheet 'Team Focus')."""
+    """Per-team inputs the user controls (Technical Issues section + AutoSheet 'Team Focus')."""
     tdc_issue: str = ""
     tdc_delta: float = 0.0
     focus: str = "performance"
@@ -6352,7 +6352,7 @@ def get(key: str, default: Any = None) -> Any:
 Each notebook tab reproduces one part of the original workbook set:
 
     Setup      AutoRegister form + Global_Var URLs + Meet Loading Data
-    Teams      AutoSheet.Sheet1 + STAT PAGE.MAIN DATA + T.D.C. + PROJ. OPR
+    Teams      AutoSheet.Sheet1 + STAT PAGE.MAIN DATA + Technical Issues + PROJ. OPR
     Matches    Main-Calc.TED rows 48+ and AutoScout '1' rows 3..143
     My Team    AutoScout '1' scouting panel (R..AA)
     Standings  AutoScout.Sheet16
@@ -6440,9 +6440,9 @@ def value_to_tristate(value: Optional[bool]) -> str:
     return "Follow mode" if value is None else ("On" if value else "Off")
 
 
-CAP_EXPLAINER = """CAP - "Calculated Average Points"
+CAP_EXPLAINER = """CAP: Calculated Average Points
 
-Quick glossary: FTC means FIRST Tech Challenge; CAP means Calculated Average Points; OPR means Offensive Power Rating; EPA means Expected Points Added; RP means Ranking Points. Win chance means Chance of Winning.
+Quick glossary: FTC means FIRST Tech Challenge; CAP means Calculated Average Points; OPR means Offensive Power Rating; EPA means Expected Points Added; RP means Ranking Points; AUTO means autonomous scoring; TELEOP means teleoperated scoring; ENDGAME means endgame scoring. Win chance means Chance of Winning.
 
 CAP is AutoScout's single number for how many points a team is worth to its
 alliance. It starts from the team's non-penalty OPR and nudges it with the
@@ -6459,8 +6459,7 @@ The inputs (from the original scoring worksheet):
              "performance"
 
 A match prediction is just CAP(red 1) + CAP(red 2) against the same for blue,
-and the "chance of winning" is one side's share of the two totals - a point
-share, not a calibrated probability.
+and Win chance is the model's estimated probability that an alliance will win.
 """
 
 CHARTS_EXPLAINER = """Charts (new in 2.2)
@@ -7094,7 +7093,7 @@ class TeamsTab(Tab):
         self.tree.pack(fill="both", expand=True)
         self.tree.bind_select(self._on_select)
 
-        ed = ttk.LabelFrame(left, text="Adjust the selected team (T.D.C. + Team Focus)", padding=8)
+        ed = ttk.LabelFrame(left, text="Adjust the selected team (Technical Issues + Team Focus)", padding=8)
         ed.pack(fill="x", pady=(8, 0))
         self.sel_var = tk.StringVar(value="No team selected.")
         ttk.Label(ed, textvariable=self.sel_var, width=34).grid(row=0, column=0, columnspan=2, sticky="w")
@@ -7693,7 +7692,7 @@ class AlliancesTab(Tab):
 
 WRONG_COLUMNS = [
     ("label", "Match", 70, "w"), ("pred", "Pred.", 80, "w"), ("actual", "Actual", 70, "w"),
-    ("pts", "Predicted pts", 110, "e"), ("score", "Actual score", 106, "e"),
+    ("pts", "Pred. pts", 110, "e"), ("score", "Actual score", 106, "e"),
     ("suggest", "Suggestion", 220, "w"), ("cls", "Classification", 170, "w"),
 ]
 FLAG_COLUMNS = [
@@ -8051,7 +8050,7 @@ TEAM_VARS: list[tuple[str, str, Callable]] = [
     ("endgame", "Endgame", lambda t, c: t.endgame),
     ("avg", "AVG", lambda t, c: t.avg),
     ("new_avg", "NEW AVG", lambda t, c: t.new_avg),
-    ("ftc_avg", "FTC AVG (after T.D.C.)", lambda t, c: t.ftc_avg),
+    ("ftc_avg", "FTC AVG (after Technical Issues)", lambda t, c: t.ftc_avg),
     ("proj_opr", "Projected OPR", lambda t, c: _opt(t.proj_opr)),
     ("eopr", "EOPR", lambda t, c: t.eopr),
     ("cap_opr", "CAP − OPR", lambda t, c: t.cap - t.opr),
@@ -8066,7 +8065,7 @@ TEAM_VARS: list[tuple[str, str, Callable]] = [
     ("events", "Events played this season", lambda t, c: float(t.events_played)),
     ("epa_matches", "Matches EPA learned from", lambda t, c: float(t.epa_matches)),
     ("src_rank", "Rank at source event", lambda t, c: float(t.rank) if t.rank else None),
-    ("tdc_delta", "T.D.C. delta", lambda t, c: t.tdc_delta),
+    ("tdc_delta", "Technical issues adjustment", lambda t, c: t.tdc_delta),
 ]
 TEAM_VAR_LABELS = [lab for _, lab, _ in TEAM_VARS]
 TEAM_VAR_BY_LABEL = {lab: (k, fn) for k, lab, fn in TEAM_VARS}
@@ -8103,8 +8102,8 @@ MATCH_X_VARS = [("Match (in order)", "index"), ("Match number", "number")]
 ALL_MATCH_X_VARS = [("Match (in order played)", "index")]
 MATCH_Y_VARS: list[tuple[str, str, Callable]] = [
     ("epa", "EPA before the match", lambda mm, epa, p, m: epa),
-    ("pred_mine", "Predicted points, my alliance", lambda mm, epa, p, m: p.red_pts if mm.color == "RED" else p.blue_pts),
-    ("pred_opp", "Predicted points, opponents", lambda mm, epa, p, m: p.blue_pts if mm.color == "RED" else p.red_pts),
+    ("pred_mine", "Pred. points, my alliance", lambda mm, epa, p, m: p.red_pts if mm.color == "RED" else p.blue_pts),
+    ("pred_opp", "Pred. points, opponents", lambda mm, epa, p, m: p.blue_pts if mm.color == "RED" else p.red_pts),
     ("pred_margin", "Predicted margin", lambda mm, epa, p, m: (p.red_pts - p.blue_pts) * (1 if mm.color == "RED" else -1)),
     ("cow", "Chance of winning (%)", lambda mm, epa, p, m: mm.cow * 100),
     ("alliance_strength", "My alliance's Alliance Strength (%)",
@@ -8148,7 +8147,7 @@ PRED_VARS: list[tuple[str, str, Callable]] = [
     ("blue_cow", "Blue chance of winning (%)", lambda p: p.blue_cow * 100),
     ("red_strength", "Red Alliance Strength (fitted win rate %)", lambda p: p.red_strength),
     ("blue_strength", "Blue Alliance Strength (fitted win rate %)", lambda p: p.blue_strength),
-    ("closeness", "Closeness (50 − |COW − 50|)", lambda p: 50 - abs(p.red_cow * 100 - 50)),
+    ("closeness", "Closeness (50 − |Win chance − 50|)", lambda p: 50 - abs(p.red_cow * 100 - 50)),
     ("actual_red", "Actual red points (np)", lambda p: _alliance_score(p.match, "RED")),
     ("actual_blue", "Actual blue points (np)", lambda p: _alliance_score(p.match, "BLUE")),
     ("actual_margin", "Actual margin (red − blue, np)", lambda p: _margin(p.match, "RED")),
@@ -8270,7 +8269,7 @@ same as "Matches at this event". Hover a point for the event, match label and va
 Every team at the meet is one dot. X axis and Y axis can be any per-team statistic: OPR, CAP,
 EPA, the prediction rating in use, Auto, Teleop, Endgame, AVG, NEW AVG, FTC AVG, Projected OPR,
 EOPR, CAP − OPR, EPA − OPR, EPA − CAP, rating spread, projected rank and RP, wins, events played,
-matches EPA has learned from, rank at the source event, T.D.C. delta.
+matches EPA has learned from, rank at the source event, Technical issues adjustment.
 
 Z (size + colour): an optional third statistic. Bigger, more golden dots have a higher value;
 small navy dots a lower one. "- none -" turns it off, and your own team is then drawn in gold.
@@ -8324,7 +8323,7 @@ not played yet. Choosing a Z statistic replaces the colours with the size-and-co
 Actual points are non-penalty scores ("np"). Suggested views:
   X = Predicted red points, Y = Predicted blue points, Z = Predicted margin (absolute)
       dots near the diagonal are toss-ups; big gold dots are blow-outs
-  X = Match number, Y = Closeness (50 − |COW − 50|)   when in the day the tight matches fall
+  X = Match number, Y = Closeness (50 − |Win chance − 50|)   when in the day the tight matches fall
   X = Predicted margin (red − blue), Y = Actual margin (red − blue, np)
       a straight diagonal is perfect prediction; dots in the wrong quadrant are the wrong calls
   X = Match number, Y = Margin error (absolute)   did the predictions improve as the meet went on?
@@ -8650,7 +8649,7 @@ class TeamChartPanel(ttk.Frame):
             self.preset_ratings(refresh=False)
         else:
             self.y_vars[0].set("EPA before the match")
-            self.y_vars[1].set("Predicted points, my alliance")
+            self.y_vars[1].set("Pred. points, my alliance")
             self.y_vars[2].set("Actual points, my alliance (np)")
         self.refresh()
 
@@ -9112,7 +9111,7 @@ class ChartsTab(Tab):
                         color = UI_GOLD_DEEP
                 pts.append(ChartPoint(x, y, label=m.label, z=z, key=m.label, color=color,
                                       text=f"{m.label}: red {m.red} vs blue {m.blue}\npred {p.winner} {p.red_pts:.0f}-{p.blue_pts:.0f} "
-                                           f"(COW {p.red_cow:.0%})" + (f"\nactual {m.winner} {m.red_score:.0f}-{m.blue_score:.0f}" if m.winner else "")))
+                                           f"(Win chance {p.red_cow:.0%})" + (f"\nactual {m.winner} {m.red_score:.0f}-{m.blue_score:.0f}" if m.winner else "")))
             title = f"{len(pts)} matches - {self.py_var.get()} against {self.px_var.get()}"
             self.pair_status.set("Green = called correctly, red = called wrong, gold = my team's match, plain = not played yet "
                                  "(colours give way to the Z variable when one is chosen). Click a point to open the match.")
@@ -9261,7 +9260,7 @@ block on the One team page, which does, on purpose.
 
 Load a meet on the Setup tab first (with "fetch history" ticked, so each team's
 earlier events are available). The charts fill in automatically and repaint
-whenever the data changes: new results, a T.D.C. adjustment, a settings change.
+whenever the data changes: new results, a Technical issues adjustment, a settings change.
 
 
 PAGE 1 - ONE TEAM
@@ -9340,7 +9339,7 @@ Scatter
    OPR, CAP, EPA, the prediction rating in use, Auto, Teleop, Endgame, AVG, NEW
    AVG, FTC AVG, Projected OPR, EOPR, the differences CAP − OPR, EPA − OPR and
    EPA − CAP, the rating spread, projected rank and RP, wins, events played,
-   matches EPA has learned from, rank at the source event, or the T.D.C. delta.
+   matches EPA has learned from, rank at the source event, or the Technical issues adjustment.
    "Z (size + colour)" adds a third number: bigger, more golden dots have a
    higher value of it; small navy dots a lower one. "- none -" turns it off.
    "Label points" writes the team number beside each dot.
@@ -9393,7 +9392,7 @@ Matches on the schedule
      Z = Predicted margin (absolute)
          the default - dots near the diagonal are toss-ups, big gold dots are
          blow-outs
-     X = Match number, Y = Closeness (50 − |COW − 50|)
+     X = Match number, Y = Closeness (50 − |Win chance − 50|)
          when in the day the tight matches fall
      X = Predicted margin (red − blue), Y = Actual margin (red − blue, np)
          how good the predictions were: a straight diagonal is perfect, dots in
