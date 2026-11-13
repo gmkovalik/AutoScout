@@ -246,7 +246,7 @@ class TeamStats:
         return tdc_adjusted_avg(self.new_avg, self.auto, self.endgame, self.tdc_issue)
 
     @property
-    def ftc_avg(self) -> float:        # Technical Issues = L + N   ("FTC AVG" in AutoSheet)
+    def ftc_avg(self) -> float:        # Technical Issues = L + N   ("Team average" in AutoSheet)
         return self.tdc_avg + self.tdc_delta
 
     @property
@@ -5506,7 +5506,7 @@ from typing import Optional
 
 
 CSV_TEAM_COLUMNS = ["Rank", "Team", "Name", "OPR", "Auto", "Teleop", "Endgame", "AVG", "NEW AVG",
-                    "Proj OPR", "Technical issue", "Technical issues adjustment", "FTC AVG", "Focus", "CAP",
+                    "Projected OPR", "Technical issue", "Technical issues adjustment", "Team average", "Focus", "CAP",
                     "CAP-OPR", "EPA", "Events", "Source event", "Record"]
 
 CSV_MATCH_COLUMNS = ["Match", "Red 1", "Red 2", "Blue 1", "Blue 2", "Red pts", "Blue pts",
@@ -5515,7 +5515,7 @@ CSV_MATCH_COLUMNS = ["Match", "Red 1", "Red 2", "Blue 1", "Blue 2", "Red pts", "
                      "Correct", "Surrogates"]
 
 CSV_STANDING_COLUMNS = ["Rank", "Team", "Name", "Wins", "Losses", "Played", "Scheduled",
-                        "RP", "TBP1", "TBP2", "Captain"]
+                        "Ranking points", "Auto tiebreaker points", "Endgame tiebreaker points", "Captain"]
 
 CSV_ALLIANCE_COLUMNS = ["Rank", "Team 1", "Team 2", "Teams", "Total CAP", "Beats", "Opponents",
                         "Win rate", "Alliance Strength", "Closest opponent", "Margin",
@@ -5696,7 +5696,7 @@ def printable_text(session) -> str:
     out.append("")
 
     out += ["PROJECTED STANDINGS", "-------------------"]
-    out += _table(["Rank", "Team", "Name", "W-L", "RP", "TBP1", "TBP2", ""],
+    out += _table(["Rank", "Team", "Name", "W-L", "Ranking points", "Auto tiebreaker points", "Endgame tiebreaker points", ""],
                   [[r.rank, r.number, r.name[:22], f"{r.wins}-{r.losses}", f"{r.rp:.2f}",
                     f"{r.tbp1:.1f}", f"{r.tbp2:.1f}", "captain" if r.captain_rank else ""]
                    for r in session.table],
@@ -5706,7 +5706,7 @@ def printable_text(session) -> str:
     if session.my_team and session.my_team in session.teams:
         info = session.my_summary()
         out += [f"MY TEAM {session.my_team}", "-" * (8 + len(str(session.my_team)))]
-        out += _table(["Match", "Color", "With", "Against", "Win chance", "MR", "Predicted", "Actual"],
+        out += _table(["Match", "Color", "With", "Against", "Win chance", "Match rating", "Predicted", "Actual"],
                       [[x.prediction.match.label, x.color,
                         " ".join(str(n) for n in x.partner),
                         " ".join(str(n) for n in x.opponents),
@@ -5908,7 +5908,7 @@ def html_report(session) -> str:
                      _e(t.focus if t.focus != "performance" else "")])
         classes.append("mine" if mine == t.number else "")
     b.write(_html_table(["#", "Team", "Name", "OPR", "Auto", "Teleop", "Endgame", "NEW AVG",
-                         "Proj OPR", "CAP", "EPA", "Technical issue", "Focus"],
+                         "Projected OPR", "CAP", "EPA", "Technical issue", "Focus"],
                         rows, numeric={0, 1, 3, 4, 5, 6, 7, 8, 9, 10}, row_classes=classes))
 
     b.write("<h2>Projected standings</h2>")
@@ -5918,7 +5918,7 @@ def html_report(session) -> str:
                      str(r.scheduled), f"{r.rp:.2f}", f"{r.tbp1:.1f}", f"{r.tbp2:.1f}",
                      "captain" if r.captain_rank else ""])
         classes.append("mine" if mine == r.number else "")
-    b.write(_html_table(["Rank", "Team", "Name", "W–L", "Matches", "RP", "TBP1", "TBP2", ""],
+    b.write(_html_table(["Rank", "Team", "Name", "W–L", "Matches", "Ranking points", "Auto tiebreaker points", "Endgame tiebreaker points", ""],
                         rows, numeric={0, 1, 4, 5, 6, 7}, row_classes=classes))
 
     if mine and mine in session.teams:
@@ -5931,7 +5931,7 @@ def html_report(session) -> str:
                  "Win" if x.predicted_win else "Loss", _e(x.actual or "-")]
                 for x in info["matches"]]
         b.write(_html_table(["Match", "Alliance", "With", "Against", "Chance of winning",
-                             "MR", "Predicted", "Actual"], rows, numeric={4, 5}))
+                             "Match rating", "Predicted", "Actual"], rows, numeric={4, 5}))
         b.write(f"<p class='sub'>Predicted wins {info['wins']}/{len(info['matches'])} &middot; "
                 f"old RP {info['old_rp']} &middot; projected rank {info['rank']}</p>")
 
@@ -6442,7 +6442,7 @@ def value_to_tristate(value: Optional[bool]) -> str:
 
 CAP_EXPLAINER = """CAP: Calculated Average Points
 
-Quick glossary: FTC means FIRST Tech Challenge; CAP means Calculated Average Points; OPR means Offensive Power Rating; EPA means Expected Points Added; RP means Ranking Points; AUTO means autonomous scoring; TELEOP means teleoperated scoring; ENDGAME means endgame scoring. Win chance means Chance of Winning.
+Quick glossary: FTC means FIRST Tech Challenge; CAP means Calculated Average Points; OPR means Offensive Power Rating; EPA means Expected Points Added; RP means Ranking Points; MR means Match rating; EOPR means Event Offensive Power Rating; TBP1 means the autonomous tiebreaker points; TBP2 means the endgame tiebreaker points; AUTO means autonomous scoring; TELEOP means teleoperated scoring; ENDGAME means endgame scoring; AVG means average; PROJ means projected. Win chance means Chance of Winning.
 
 CAP is AutoScout's single number for how many points a team is worth to its
 alliance. It starts from the team's non-penalty OPR and nudges it with the
@@ -7054,9 +7054,9 @@ TEAM_COLUMNS = [
     ("rank", "#", 40, "e"), ("team", "Team", 62, "e"), ("name", "Name", 190, "w"),
     ("opr", "OPR", 62, "e"), ("auto", "Auto", 58, "e"), ("teleop", "Teleop", 62, "e"),
     ("endgame", "Endgame", 68, "e"), ("avg", "AVG", 62, "e"), ("new_avg", "NEW AVG", 72, "e"),
-    ("proj_opr", "Proj OPR", 72, "e"), ("events", "Events", 54, "e"),
+    ("proj_opr", "Projected OPR", 72, "e"), ("events", "Events", 54, "e"),
     ("tdc", "Technical issue", 92, "w"), ("delta", "Delta", 58, "e"), ("focus", "Focus", 88, "w"),
-    ("ftc_avg", "FTC AVG", 72, "e"), ("cap", "CAP", 66, "e"), ("cap_opr", "CAP−OPR", 74, "e"),
+    ("ftc_avg", "Team average", 72, "e"), ("cap", "CAP", 66, "e"), ("cap_opr", "CAP−OPR", 74, "e"),
     ("epa", "EPA", 62, "e"),
 ]
 
@@ -7381,7 +7381,7 @@ class ResultDialog(tk.Toplevel):
 MY_MATCH_COLUMNS = [
     ("label", "Match", 66, "w"), ("color", "Alliance", 74, "w"), ("partner", "Partner", 90, "w"),
     ("opp", "Opponents", 140, "w"), ("cow", "Chance of winning", 130, "e"),
-    ("mr", "MR", 44, "center"), ("pred", "Pred.", 80, "w"), ("actual", "Actual", 70, "w"),
+    ("mr", "Match rating", 44, "center"), ("pred", "Pred.", 80, "w"), ("actual", "Actual", 70, "w"),
 ]
 
 
@@ -7482,7 +7482,7 @@ class MyTeamTab(Tab):
 STANDING_COLUMNS = [
     ("rank", "Rank", 54, "e"), ("team", "Team", 66, "e"), ("name", "Name", 200, "w"),
     ("wl", "W–L", 70, "center"), ("played", "Played", 86, "center"),
-    ("rp", "RP", 62, "e"), ("tbp1", "TBP1 (Auto)", 92, "e"), ("tbp2", "TBP2 (Endgame)", 106, "e"),
+    ("rp", "Ranking points", 62, "e"), ("tbp1", "TBP1 (Auto)", 92, "e"), ("tbp2", "TBP2 (Endgame)", 106, "e"),
     ("captain", "Captain", 70, "center"),
 ]
 
@@ -8052,7 +8052,7 @@ TEAM_VARS: list[tuple[str, str, Callable]] = [
     ("new_avg", "NEW AVG", lambda t, c: t.new_avg),
     ("ftc_avg", "FTC AVG (after Technical Issues)", lambda t, c: t.ftc_avg),
     ("proj_opr", "Projected OPR", lambda t, c: _opt(t.proj_opr)),
-    ("eopr", "EOPR", lambda t, c: t.eopr),
+    ("eopr", "Event OPR", lambda t, c: t.eopr),
     ("cap_opr", "CAP − OPR", lambda t, c: t.cap - t.opr),
     ("epa_opr", "EPA − OPR", lambda t, c: None if t.epa is None else t.epa - t.opr),
     ("epa_cap", "EPA − CAP", lambda t, c: None if t.epa is None else t.epa - t.cap),
@@ -8478,7 +8478,7 @@ def team_all_match_rows(session: Session, team: int) -> list[tuple[str, MyMatch,
 # One team's chart + the "edit data inputs" block
 # --------------------------------------------------------------------------- #
 OVERRIDE_FIELDS = [("opr", "OPR"), ("auto", "Auto"), ("teleop", "Teleop"),
-                   ("endgame", "Endgame"), ("proj_opr", "Proj OPR"), ("epa", "EPA")]
+                   ("endgame", "Endgame"), ("proj_opr", "Projected OPR"), ("epa", "EPA")]
 
 
 class TeamChartPanel(ttk.Frame):
