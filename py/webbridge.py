@@ -21,6 +21,7 @@ import sys
 import time
 import types
 import urllib.error
+import urllib.parse
 
 import tkstub
 
@@ -618,6 +619,45 @@ VIEWS = {"overview": view_overview, "competition": view_competition, "setup": vi
 # --------------------------------------------------------------------------- #
 
 
+def act_events_search(a):
+    """Search FTCScout REST event-search endpoint."""
+    query = str(a.get("query", "")).strip()
+    season = A.as_int(str(a.get("season", "")), APP.session.season)
+    if len(query) < 2:
+        return {"ok": False, "message": "Enter at least two characters to search for a meet."}
+    try:
+        client = APP.make_client(offline=False)
+        path = (f"events/search/{int(season)}?searchText="
+                f"{urllib.parse.quote(query, safe='')}&limit=30")
+        rows = client.get_json(path, max_age=3600) or []
+        # FTCScout fuzzy-searches event names; also support exact event-code lookup.
+        if not rows and " " not in query:
+            try:
+                exact = client.get_json(f"events/{int(season)}/{urllib.parse.quote(query.upper(), safe='')}", max_age=3600)
+                if isinstance(exact, dict):
+                    rows = [exact]
+            except A.ApiError:
+                pass
+        seen = set()
+        results = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            code = str(row.get("code") or "").strip().upper()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            location = ", ".join(str(row.get(k)).strip() for k in ("city", "stateprov", "country") if row.get(k))
+            dates = " – ".join(str(row.get(k)).strip() for k in ("dateStart", "dateEnd") if row.get(k))
+            meta = " · ".join(x for x in (code, location, dates) if x)
+            results.append({"name": str(row.get("name") or code), "code": code, "season": int(season), "meta": meta})
+        return {"ok": True, "results": results, "message": f"Found {len(results)} matching meet(s)." if results else "No matching meets found for this season."}
+    except A.ApiError as e:
+        return {"ok": False, "message": getattr(e, "user_message", str(e))}
+    except Exception as e:
+        return {"ok": False, "message": f"Could not search FTCScout: {e}"}
+
+
 def act_load(a):
     """Setup → Load event data (the desktop's SetupTab.do_load, run in this worker)."""
     p = probe(A.SetupTab, season_var=Rec(str(a.get("season", ""))), event_var=Rec(a.get("event", "")),
@@ -909,7 +949,7 @@ def act_export(a):
     return {"ok": False, "message": "Unknown export."}
 
 
-ACTIONS = {"load": act_load, "schedule": act_schedule, "my_team": act_my_team, "refresh": act_refresh,
+ACTIONS = {"load": act_load, "events_search": act_events_search, "schedule": act_schedule, "my_team": act_my_team, "refresh": act_refresh,
            "team_edit": act_team_edit, "overrides": act_overrides, "result": act_result,
            "settings": act_settings, "clear_cache": act_clear_cache, "offline": act_offline,
            "note_add": act_note_add, "note_delete": act_note_delete, "stream": act_stream,

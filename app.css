@@ -245,6 +245,17 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .switchlist button { text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 7px; cursor: pointer; }
 .switchlist button.on, .switchlist button:hover { background: var(--brand-tint); color: var(--brand); }
 .switchlist small { color: var(--muted); margin-left: 8px; }
+.event-results { margin-top: 8px; max-height: 300px; overflow-y: auto; gap: 6px; }
+.event-results .event-result {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fff; text-align: left;
+}
+.event-results .event-result:hover { border-color: var(--brand); background: var(--brand-tint); }
+.event-results .event-result > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.event-results .event-result b { overflow-wrap: anywhere; }
+.event-results .event-result small { margin: 0; font-size: 12px; }
+.event-results .event-load-label { flex: none; color: var(--brand); font-size: 12.5px; font-weight: 700; }
+
 .toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; width: fit-content; bottom: calc(18px + var(--safe-bottom)); z-index: 80; background: var(--text); color: #fff; padding: 10px 16px; border-radius: 9px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 14px; }
 .toast.err { background: var(--red); }
 
