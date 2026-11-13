@@ -718,7 +718,7 @@ RENDER.setup = async () => {
     results.textContent = "";
     for (const ev of S.eventSearch.results) {
       results.append(h("button", { type: "button", class: "event-result", onclick: () => chooseEvent(ev) },
-        h("span", null, h("b", { text: ev.name || ev.code }), h("small", { text: ev.code })),
+        h("span", null, h("b", { text: ev.name || ev.code }), h("small", { text: ev.meta || ev.code })),
         h("span", { class: "event-load-label", text: "Load event →" })));
     }
     results.hidden = !S.eventSearch.results.length;
@@ -778,6 +778,8 @@ RENDER.setup = async () => {
         field("Extra team numbers (optional)", extra),
         check("Offline (cache only — never touch the network)", offline, (v) => { offline = v; }),
         check("Fetch each team's season history (needed for projected OPR)", history, (v) => { history = v; }))),
+      h("div", { class: "row", style: { marginTop: "14px" } },
+        h("div", { class: "progress", id: "setupProgress" }, h("div", { style: { width: (loadUI.frac * 100).toFixed(0) + "%" } }))),
       h("div", { class: "status", id: "setupStatus", text: S.loading ? loadUI.msg : "A big event takes a few minutes the first time: every team's season history is downloaded." })),
     card("Sessions saved in this browser", sessions,
       h("div", { class: "row", style: { marginTop: "12px" } }, fileIn,
