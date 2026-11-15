@@ -400,21 +400,13 @@ def view_competition(o):
     p.refresh()
     s = APP.session
     upcoming = next((m.label for m in s.matches if not m.played), None)
-    label = o.get("match") or upcoming or (s.matches[0].label if s.matches else None)
-    detail = None
-    if label:
-        p._show_match(label)
-        detail = {"label": label, "title": p.detail_title.get(), "text": p.detail_text.text}
+    matches_table = view_matches({})["table"]
+    # Keep the full Matches-tab statistics in Schedule Data, not a reduced matchup list.
+    # The browser adds an Open action to each row for the existing detailed match dialog.
     return {"line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS", "WINNER", "CORRECT"],
-                                     [(row[0], row[1], row[2], row[3], row[4],
-                                       next((m.winner or "" for m in s.matches if m.label == row[0]), ""),
-                                       ("✔" if next((x.correct for x in s.predictions if x.match.label == row[0]), None) is True else
-                                        "✘" if next((x.correct for x in s.predictions if x.match.label == row[0]), None) is False else ""))
-                                      for row in p.match_tree.inserted]),
-            "upcoming": upcoming, "detail": detail}
+            "matches": matches_table, "upcoming": upcoming}
 
 
 def view_setup(o):

@@ -321,3 +321,15 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 
 .matchrow .side.r.won { color:#a51f2d; font-weight:900; background:rgba(190,35,50,.12); border-radius:5px; padding:2px 5px; }
 .matchrow .side.b.won { color:#1e56a8; font-weight:900; background:rgba(35,95,190,.12); border-radius:5px; padding:2px 5px; }
+
+
+/* Schedule Data uses the full-width, sortable Matches table instead of a selected-match split panel. */
+.schedule-matches { max-height: 72vh; overflow: auto; }
+.schedule-matches table { min-width: 1280px; }
+.schedule-matches tbody tr { cursor: pointer; }
+.schedule-matches tbody tr:hover { background: var(--brand-tint); }
+.schedule-matches td:last-child, .schedule-matches th:last-child { text-align: center; font-weight: 800; color: var(--brand-ink); white-space: nowrap; }
+@media(max-width:700px) {
+  .schedule-matches { max-height: 68vh; }
+  .schedule-matches table { min-width: 1120px; }
+}
