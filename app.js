@@ -120,16 +120,15 @@ const S = {
   boot: null, head: null, page: "overview", params: {}, sort: {}, loading: false,
   comp: {}, panel: {}, all: {}, pairs: {}, chartsPage: "team", live: {}, research: { results: [], profile: null, season: "", query: "" },
   eventSearch: { query: "", results: [], status: "" },
-  auto: { on: false, minutes: 2, timer: null },
+  auto: { on: false, minutes: 2, timer: null, initialized: false },
 };
 
 const PAGES = [
   ["WORKSPACE", [["overview", "Overview", "⌂", "Competition command center"],
-    ["competition", "Competition Day", "\u2691\uFE0E", "Live event operations and match desk"],
+    ["competition", "Schedule Data", "\u2691\uFE0E", "Live schedule, match details and event statistics"],
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Your event team database"],
     ["research", "Team Research", "⌕", "Public FTC team intelligence"],
-    ["matches", "Matches", "\u26A1\uFE0E", "Match schedule and predictions"],
     ["myteam", "My Team", "\u2605\uFE0E", "Your team's performance"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
     ["alliances", "Alliances", "◇", "Alliance selection workspace"],
@@ -176,11 +175,11 @@ function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "");
   const [page, query] = raw.split("?");
   const params = Object.fromEntries(new URLSearchParams(query || ""));
-  return { page: PAGE[page] ? page : "overview", params };
+  return { page: page === "matches" ? "competition" : (PAGE[page] ? page : "overview"), params };
 }
 function go(page, params) {
   const q = params ? "?" + new URLSearchParams(params).toString() : "";
-  const target = "#/" + page + q;
+  const target = "#/" + (page === "matches" ? "competition" : page) + q;
   if (location.hash === target) render();
   else location.hash = target;
 }
@@ -228,7 +227,7 @@ function sortKey(v) {
 function cmpKeys(a, b) { return a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0); }
 
 function dataTable(t, opts = {}) {
-  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet." } = opts;
+  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet.", matchStyle = false } = opts;
   const box = h("div", { class: "tablewrap" + (short ? " short" : "") });
   if (!t || !t.rows || !t.rows.length) {
     box.append(h("div", { class: "empty", text: empty }));
@@ -255,7 +254,17 @@ function dataTable(t, opts = {}) {
       if (onRow) tr.addEventListener("click", () => onRow(iid, vals));
       vals.forEach((v, i) => {
         const c = cols[i] || {};
-        tr.append(h("td", { class: [align(c), i < sticky ? "sticky" : "", wrap.includes(c.key) ? "wrap" : ""].join(" ") }, v == null ? "" : String(v)));
+        const classes = [align(c), i < sticky ? "sticky" : "", wrap.includes(c.key) ? "wrap" : ""];
+        if (matchStyle) {
+          if (c.key === "label" && /^Q(?:ual)?[- ]?\d+/i.test(String(v))) classes.push("qual-number");
+          if (c.key === "correct" && (String(v) === "✔" || String(v) === "✘")) classes.push(String(v) === "✔" ? "match-correct" : "match-incorrect");
+          if (["r1", "r2", "b1", "b2"].includes(c.key)) {
+            const winner = vals[cols.findIndex(x => x.key === "winner")];
+            if (winner === "RED" && c.key.startsWith("r")) classes.push("alliance-red-winner");
+            if (winner === "BLUE" && c.key.startsWith("b")) classes.push("alliance-blue-winner");
+          }
+        }
+        tr.append(h("td", { class: classes.join(" ") }, v == null ? "" : String(v)));
       });
       tbody.append(tr);
     }
@@ -647,19 +656,24 @@ RENDER.overview = async () => {
 RENDER.competition = async (params) => {
   if (params.match) S.comp.match = params.match;
   const d = await view("competition", { match: S.comp.match });
+  if (d.head.loaded && !S.auto.initialized) { S.auto.initialized = true; setAuto(true); }
   const my = d.head.my_team ? String(d.head.my_team) : "";
   const list = h("div", { class: "matchlist" });
   const sel = d.detail ? d.detail.label : null;
-  for (const [, [label, red, blue, forecast, status]] of d.matches.rows) {
+  for (const [, [label, red, blue, forecast, status, winner, correct]] of d.matches.rows) {
     const mine = my && red.split(" · ").concat(blue.split(" · ")).includes(my);
     const chip = label === d.upcoming ? h("span", { class: "chip next", text: "Up next" })
       : h("span", { class: "chip " + (status === "Played" ? "played" : ""), text: status });
     const fc = String(forecast).match(/R (\d+)% \/ B (\d+)%/);
+    const qual = /^Q(?:ual)?[- ]?\d+/i.test(String(label));
     list.append(h("button", { class: "matchrow" + (label === sel ? " on" : "") + (mine ? " mine" : ""), type: "button",
-      onclick: () => { S.comp.match = label; rerender(); } },
-    h("span", { class: "lab", text: label }),
-    h("span", { class: "teams" }, h("span", { class: "side r", text: red }), h("span", { class: "side b", text: blue })),
-    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }), chip)));
+      onclick: () => { S.comp.match = label; openMatchDetails(label); } },
+    h("span", { class: "lab" + (qual ? " qual-number" : ""), text: label }),
+    h("span", { class: "teams" },
+      h("span", { class: "side r" + (winner === "RED" ? " won" : ""), text: red }),
+      h("span", { class: "side b" + (winner === "BLUE" ? " won" : ""), text: blue })),
+    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }),
+      correct ? h("b", { class: correct === "✔" ? "match-correct" : "match-incorrect", text: correct }) : null, chip)));
   }
   if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate your match desk." }));
   afterRender.push(() => {          // scroll the list itself, not the page
@@ -668,15 +682,20 @@ RENDER.competition = async (params) => {
   });
   const detail = d.detail
     ? [h("h3", { class: "plain", text: d.detail.title, style: { fontSize: "20px", marginBottom: "8px" } }),
-      h("div", { class: "detail", text: d.detail.text }),
+      h("p", { class: "muted", text: "Select Open match details to see team names, current statistics, scores and scouting notes." }),
       h("div", { class: "row", style: { marginTop: "10px", justifyContent: "flex-end" } },
-        btn("Scout this match", () => { S.live.match = d.detail.label; go("live"); }, "primary"))]
+        btn("Open match details", () => openMatchDetails(d.detail.label), "primary"),
+        btn("Scout this match", () => { S.live.match = d.detail.label; go("live"); }))]
     : [h("p", { class: "muted", text: "Select a match" })];
   return [
     hero("COMPETITION DAY", "Everything you need between matches.", d.head.loaded ? d.line : "Load an event to populate your match desk."),
     metricsRow(d.metrics),
     h("div", { class: "row", style: { marginBottom: "14px" } },
-      btn("Refresh results", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
+      btn("Refresh meet data", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
+      check("Auto-refresh", S.auto.on, (v) => setAuto(v)),
+      h("span", { class: "muted small", text: "every" }),
+      h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "64px" }, onchange: (e) => { S.auto.minutes = Math.max(1, Number(e.target.value) || 2); if (S.auto.on) setAuto(true); } }),
+      h("span", { class: "muted small", text: "min" }),
       btn("Open live scouting", () => go("live")), btn("Alliance selection", () => go("alliances")),
       btn("Team research", () => go("research")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
     h("div", { class: "grid2" }, card("Match desk", list), card("Selected match", ...detail)),
@@ -930,7 +949,7 @@ RENDER.research = async () => {
     h("div", { class: "grid2" },
       card("Season event history", dataTable(P.events, { id: "r-events", short: true, empty: "No events this season." })),
       h("div", null, card("Awards", dataTable(P.awards, { id: "r-awards", short: true, empty: "No awards listed." })),
-        card("Match log", dataTable(P.matches, { id: "r-matches", short: true, empty: "No match records." })))),
+        card("Match log", dataTable(P.matches, { id: "r-matches", short: true, empty: "No match records.", onRow: (_iid, vals) => infoDialog("Team match record", vals.join("\\n")) })))),
     h("p", { class: "note pre", text: P.footer }),
   ] : [];
   return [
@@ -942,6 +961,43 @@ RENDER.research = async () => {
     ...profile,
   ];
 };
+
+// Open one consistent match detail view from every match list.
+async function openMatchDetails(label) {
+  try {
+    const d = await view("match_detail", { match: String(label) });
+    const live = await view("live", { match: String(label) });
+    S.live.match = String(label);
+    S.live.team = (live.match_teams && live.match_teams[0] && live.match_teams[0][0]) ? String(live.match_teams[0][0]) : "";
+    const teams = (d.teams || []).map((side) => h("section", { class: "match-team-side " + side.color },
+      h("h3", { text: side.label }),
+      ...(side.teams || []).map((t) => h("div", { class: "match-team" },
+        h("b", { text: String(t.number) }), h("span", { text: t.name || "Team name unavailable" }),
+        h("span", { class: "muted small", text: t.stats || "" })))));
+    const noteBox = h("div");
+    const drawNotes = (nd) => {
+      noteBox.textContent = "";
+      noteBox.append(notesCard(nd, async (patch) => {
+        Object.assign(S.live, patch);
+        drawNotes(await view("live", { match: S.live.match }));
+      }));
+    };
+    drawNotes(live);
+    const matchData = await view("matches");
+    const matchColumns = matchData.table.columns.map((c) => c.key);
+    const matchRow = matchData.table.rows.find((row) => String(row[0]) === String(label));
+    modal((close) => [
+      h("button", { class: "btn small close", onclick: close, "aria-label": "Close" }, "✕"),
+      h("h2", { text: d.title || String(label) }),
+      h("div", { class: "match-team-grid" }, ...teams),
+      card("Match statistics", h("div", { class: "detail pre", text: d.text || "No additional match statistics are available yet." })),
+      noteBox,
+      h("div", { class: "foot" },
+        matchRow ? btn("Edit score", () => { close(); resultDialog(String(label), matchRow[1], matchColumns); }, "small") : null,
+        btn("Open Live Scouting", () => { close(); go("live", { match: String(label) }); }, "primary")),
+    ], { wide: true });
+  } catch (e) { toast("Could not load match details: " + e.message, true); }
+}
 
 // ---- Matches ---------------------------------------------------------------
 RENDER.matches = async (params) => {
@@ -955,9 +1011,9 @@ RENDER.matches = async (params) => {
     h("div", { class: "row", style: { marginBottom: "10px" } },
       btn("Refresh results", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
       check("Auto-refresh every", S.auto.on, (v) => setAuto(v)), minutes, h("span", { class: "muted", text: "min" })),
-    dataTable(d.table, { id: "matches", sticky: 1, flash: params.match || null, empty: "No matches loaded.",
-      onRow: (iid, vals) => resultDialog(iid, vals, cols) }),
-    h("p", { class: "note", text: "Tap a match to enter a score by hand." }),
+    dataTable(d.table, { id: "matches", sticky: 1, flash: params.match || null, empty: "No matches loaded.", matchStyle: true,
+      onRow: (iid, vals) => openMatchDetails(iid) }),
+    h("p", { class: "note", text: "Open any match to review both alliances, match statistics and scouting notes. Scores can be edited from the match details." }),
   ];
 };
 function setAuto(on) {
@@ -966,7 +1022,7 @@ function setAuto(on) {
   if (on) S.auto.timer = setInterval(async () => {
     if (S.loading) return;
     const r = await runAction("refresh", {}, false);
-    if (r.ok && ["matches", "competition", "standings", "myteam", "analysis", "overview"].includes(S.page)) rerender();
+    if (r.ok) rerender();
   }, S.auto.minutes * 60000);
 }
 function resultDialog(label, vals, cols) {
@@ -996,7 +1052,7 @@ RENDER.myteam = async () => {
     h("div", { class: "row", style: { marginBottom: "12px" } }, h("h2", { text: d.name, style: { fontSize: "22px", marginRight: "12px" } }),
       h("span", { text: "Team" }), team, btn("Show", show)),
     card("Season stats", metricsRow(d.stats), h("div", { class: "headline", text: d.change }), h("div", { class: "muted", text: d.proj })),
-    card("My matches", dataTable(d.table, { id: "mymatches", empty: "No matches for this team." })),
+    card("My matches", dataTable(d.table, { id: "mymatches", empty: "No matches for this team.", onRow: (iid) => openMatchDetails(iid) })),
   ];
 };
 
@@ -1050,7 +1106,7 @@ RENDER.analysis = async () => {
       }),
       h("span", { class: "spacer" }), btn("Re-analyse", rerender)),
     card("Prediction report", h("div", { class: "detail", text: d.summary })),
-    card("Wrong predictions", dataTable(d.wrong, { id: "wrong", wrap: ["suggest"], onRow: (iid) => go("matches", { match: iid }), empty: "No wrong predictions (or no results yet)." })),
+    card("Wrong predictions", dataTable(d.wrong, { id: "wrong", wrap: ["suggest"], onRow: (iid) => openMatchDetails(iid), empty: "No wrong predictions (or no results yet)." })),
     card("Team flags", dataTable(d.flags, { id: "flags", onRow: (iid) => go("teams", { team: iid }), empty: "No team flags." })),
   ];
 };

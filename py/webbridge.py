@@ -408,8 +408,12 @@ def view_competition(o):
     return {"line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS"],
-                                     p.match_tree.inserted),
+            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS", "WINNER", "CORRECT"],
+                                     [(row[0], row[1], row[2], row[3], row[4],
+                                       next((m.winner or "" for m in s.matches if m.label == row[0]), ""),
+                                       ("✔" if next((x.correct for x in s.predictions if x.match.label == row[0]), None) is True else
+                                        "✘" if next((x.correct for x in s.predictions if x.match.label == row[0]), None) is False else ""))
+                                      for row in p.match_tree.inserted]),
             "upcoming": upcoming, "detail": detail}
 
 
@@ -462,6 +466,27 @@ def _team_panel(team: int, o: dict) -> dict:
             "none": A.NONE_LABEL,
             "overrides": [{"key": k, "label": lab, "value": p.override_vars[k].get(),
                            "current": p.current_vars[k].get()} for k, lab in A.OVERRIDE_FIELDS]}
+
+
+def view_match_detail(o):
+    s = APP.session
+    label = str(o.get("match") or "")
+    match = next((m for m in s.matches if m.label == label), None)
+    if match is None:
+        return {"title": label or "Match details", "text": "This match is not in the loaded schedule.", "teams": []}
+    p = probe(A.CompetitionDayTab, metric_vars=recs(5))
+    p._show_match(label)
+    def side(color, numbers):
+        out = []
+        for number in numbers:
+            team = s.teams.get(number)
+            out.append({"number": number, "name": (getattr(team, "name", "") or s.team_names.get(number, "")) if team else s.team_names.get(number, ""),
+                        "stats": (f"CAP {team.cap:.1f} · OPR {team.opr:.1f} · EPA {team.epa:.1f}"
+                                  if team and getattr(team, "epa", None) is not None else
+                                  f"CAP {team.cap:.1f} · OPR {team.opr:.1f}" if team else "")})
+        return {"color": color, "label": "Red alliance" if color == "red" else "Blue alliance", "teams": out}
+    return {"title": p.detail_title.get() or label, "text": p.detail_text.text,
+            "teams": [side("red", match.red), side("blue", match.blue)]}
 
 
 def view_matches(o):
@@ -608,7 +633,7 @@ def view_settings(o):
 
 
 VIEWS = {"overview": view_overview, "competition": view_competition, "setup": view_setup,
-         "teams": view_teams, "matches": view_matches, "myteam": view_myteam,
+         "teams": view_teams, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
          "standings": view_standings, "alliances": view_alliances, "winrate": view_winrate,
          "analysis": view_analysis, "charts": view_charts, "live": view_live,
          "research": view_research, "settings": view_settings}
@@ -719,7 +744,7 @@ def act_refresh(a):
     client = APP.make_client()
     client.last_error = None
     try:
-        played = s.refresh_results(client)
+        played = s.refresh_live_data(client)
     except A.ApiError as e:
         return {"ok": False, "message": e.user_message}
     _autosave()
