@@ -451,25 +451,18 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 }
 
 
-/* Settings: keep the Fidelity descriptions inside their own columns. */
-.grid-even > .card:first-child .form {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
-  align-items: stretch;
-  gap: 12px 14px;
-}
-.grid-even > .card:first-child .form label.field {
-  min-width: 0;
-  align-self: stretch;
-}
-.grid-even > .card:first-child .form label.field > span {
-  display: block;
-  min-height: 3.6em;
+/* Settings and all other forms: prevent long field labels from overlapping. */
+label.field { min-width: 0; max-width: 100%; }
+label.field > span {
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.35;
 }
-@media (max-width: 600px) {
-  .grid-even > .card:first-child .form label.field > span {
-    min-height: 0;
-  }
+.form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  min-width: 0;
 }
+.form > * { min-width: 0; }
+.form label.field > input,
+.form label.field > select,
+.form label.field > textarea { width: 100%; max-width: 100%; }
