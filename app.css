@@ -380,3 +380,29 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
   font-weight: 900 !important;
   box-shadow: inset 0 0 0 2px #d6a900;
 }
+
+
+/* Alliance colors belong to the column headings only. Match values remain black. */
+.schedule-matches th.alliance-red-header,
+.schedule-matches th.alliance-blue-header {
+  color: #111 !important;
+  font-weight: 900;
+}
+.schedule-matches th.alliance-red-header {
+  background: #f3c8cc !important;
+  box-shadow: inset 0 -4px 0 #b42332;
+}
+.schedule-matches th.alliance-blue-header {
+  background: #cbdcf8 !important;
+  box-shadow: inset 0 -4px 0 #245bb5;
+}
+.schedule-matches td {
+  color: #111 !important;
+}
+.schedule-matches td.selected-team-number {
+  background: #ffdf4d !important;
+  color: #111 !important;
+  font-weight: 900 !important;
+  box-shadow: inset 0 0 0 1px #d6a900;
+  border-radius: 4px;
+}
