@@ -175,11 +175,11 @@ function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "");
   const [page, query] = raw.split("?");
   const params = Object.fromEntries(new URLSearchParams(query || ""));
-  return { page: PAGE[page] ? page : "overview", params };
+  return { page: page === "matches" ? "competition" : (PAGE[page] ? page : "overview"), params };
 }
 function go(page, params) {
   const q = params ? "?" + new URLSearchParams(params).toString() : "";
-  const target = "#/" + page + q;
+  const target = "#/" + (page === "matches" ? "competition" : page) + q;
   if (location.hash === target) render();
   else location.hash = target;
 }
@@ -227,7 +227,7 @@ function sortKey(v) {
 function cmpKeys(a, b) { return a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0); }
 
 function dataTable(t, opts = {}) {
-  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet." } = opts;
+  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet.", matchStyle = false } = opts;
   const box = h("div", { class: "tablewrap" + (short ? " short" : "") });
   if (!t || !t.rows || !t.rows.length) {
     box.append(h("div", { class: "empty", text: empty }));
@@ -254,7 +254,17 @@ function dataTable(t, opts = {}) {
       if (onRow) tr.addEventListener("click", () => onRow(iid, vals));
       vals.forEach((v, i) => {
         const c = cols[i] || {};
-        tr.append(h("td", { class: [align(c), i < sticky ? "sticky" : "", wrap.includes(c.key) ? "wrap" : ""].join(" ") }, v == null ? "" : String(v)));
+        const classes = [align(c), i < sticky ? "sticky" : "", wrap.includes(c.key) ? "wrap" : ""];
+        if (matchStyle) {
+          if (c.key === "label" && /^Q(?:ual)?[- ]?\d+/i.test(String(v))) classes.push("qual-number");
+          if (c.key === "correct" && (String(v) === "✔" || String(v) === "✘")) classes.push(String(v) === "✔" ? "match-correct" : "match-incorrect");
+          if (["r1", "r2", "b1", "b2"].includes(c.key)) {
+            const winner = vals[cols.findIndex(x => x.key === "winner")];
+            if (winner === "RED" && c.key.startsWith("r")) classes.push("alliance-red-winner");
+            if (winner === "BLUE" && c.key.startsWith("b")) classes.push("alliance-blue-winner");
+          }
+        }
+        tr.append(h("td", { class: classes.join(" ") }, v == null ? "" : String(v)));
       });
       tbody.append(tr);
     }
@@ -667,7 +677,7 @@ RENDER.competition = async (params) => {
   });
   const detail = d.detail
     ? [h("h3", { class: "plain", text: d.detail.title, style: { fontSize: "20px", marginBottom: "8px" } }),
-      h("div", { class: "detail", text: d.detail.text }),
+      h("p", { class: "muted", text: "Select Open match details to see team names, current statistics, scores and scouting notes." }),
       h("div", { class: "row", style: { marginTop: "10px", justifyContent: "flex-end" } },
         btn("Open match details", () => openMatchDetails(d.detail.label), "primary"),
         btn("Scout this match", () => { S.live.match = d.detail.label; go("live"); }))]
@@ -986,7 +996,7 @@ RENDER.matches = async (params) => {
     h("div", { class: "row", style: { marginBottom: "10px" } },
       btn("Refresh results", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
       check("Auto-refresh every", S.auto.on, (v) => setAuto(v)), minutes, h("span", { class: "muted", text: "min" })),
-    dataTable(d.table, { id: "matches", sticky: 1, flash: params.match || null, empty: "No matches loaded.",
+    dataTable(d.table, { id: "matches", sticky: 1, flash: params.match || null, empty: "No matches loaded.", matchStyle: true,
       onRow: (iid, vals) => openMatchDetails(iid) }),
     h("p", { class: "note", text: "Open any match to review both alliances, match statistics and scouting notes. Scores can be edited from the match details." }),
   ];
@@ -1081,7 +1091,7 @@ RENDER.analysis = async () => {
       }),
       h("span", { class: "spacer" }), btn("Re-analyse", rerender)),
     card("Prediction report", h("div", { class: "detail", text: d.summary })),
-    card("Wrong predictions", dataTable(d.wrong, { id: "wrong", wrap: ["suggest"], onRow: (iid) => go("matches", { match: iid }), empty: "No wrong predictions (or no results yet)." })),
+    card("Wrong predictions", dataTable(d.wrong, { id: "wrong", wrap: ["suggest"], onRow: (iid) => openMatchDetails(iid), empty: "No wrong predictions (or no results yet)." })),
     card("Team flags", dataTable(d.flags, { id: "flags", onRow: (iid) => go("teams", { team: iid }), empty: "No team flags." })),
   ];
 };
