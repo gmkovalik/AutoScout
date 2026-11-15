@@ -313,3 +313,18 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .match-team { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; padding: 6px 0; border-top: 1px solid var(--border); }
 .match-team .muted { grid-column: 2; }
 @media (max-width: 600px) { .match-team-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Match details and compact result indicators. */
+.match-team-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; }
+.match-team-side { border:1px solid var(--border); border-radius:10px; padding:12px; min-width:0; }
+.match-team-side.red { background:rgba(190,35,50,.06); border-color:rgba(190,35,50,.28); }
+.match-team-side.blue { background:rgba(35,95,190,.06); border-color:rgba(35,95,190,.28); }
+.match-team-side h3 { margin:0 0 8px; font-size:14px; }
+.match-team { display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 8px; padding:6px 0; border-top:1px solid var(--border); }
+.match-team .muted { grid-column:2; }
+.qual-number { color:#17803d; font-weight:800; }
+.match-correct { color:#17803d; font-weight:900; }
+.match-incorrect { color:#c62828; font-weight:900; }
+.alliance-red-winner { background:rgba(190,35,50,.12) !important; color:#a51f2d; font-weight:800; }
+.alliance-blue-winner { background:rgba(35,95,190,.12) !important; color:#1e56a8; font-weight:800; }
+@media(max-width:600px){.match-team-grid{grid-template-columns:minmax(0,1fr)}}
