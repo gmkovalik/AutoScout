@@ -243,7 +243,7 @@ function sortKey(v) {
 function cmpKeys(a, b) { return a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0); }
 
 function dataTable(t, opts = {}) {
-  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet.", matchStyle = false } = opts;
+  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet.", matchStyle = false, mineTeam = null } = opts;
   const box = h("div", { class: "tablewrap" + (short ? " short" : "") });
   if (!t || !t.rows || !t.rows.length) {
     box.append(h("div", { class: "empty", text: empty }));
@@ -259,7 +259,9 @@ function dataTable(t, opts = {}) {
     }
     const thead = h("thead", null, h("tr", null, cols.map((c, i) => {
       const arrow = st && st.col === i ? (st.desc ? " ▼" : " ▲") : "";
-      return h("th", { class: [align(c), i < sticky ? "sticky" : ""].join(" "), scope: "col",
+      const headerSide = ["r1", "r2", "rpts", "rcow", "rstr"].includes(c.key) ? "alliance-red-header" :
+        ["b1", "b2", "bpts", "bcow", "bstr"].includes(c.key) ? "alliance-blue-header" : "";
+      return h("th", { class: [align(c), i < sticky ? "sticky" : "", headerSide].join(" "), scope: "col",
         onclick: () => { const cur = S.sort[id]; S.sort[id] = { col: i, desc: cur && cur.col === i ? !cur.desc : false }; draw(); } },
       c.label + arrow);
     })));
@@ -273,12 +275,10 @@ function dataTable(t, opts = {}) {
         const classes = [align(c), i < sticky ? "sticky" : "", wrap.includes(c.key) ? "wrap" : ""];
         if (matchStyle) {
           if (c.key === "label" && /^Q(?:ual)?[- ]?\d+/i.test(String(v))) classes.push("qual-number");
-          if (c.key === "correct" && (String(v) === "✔" || String(v) === "✘")) classes.push(String(v) === "✔" ? "match-correct" : "match-incorrect");
-          if (["r1", "r2", "b1", "b2"].includes(c.key)) {
-            const winner = vals[cols.findIndex(x => x.key === "winner")];
-            if (winner === "RED" && c.key.startsWith("r")) classes.push("alliance-red-winner");
-            if (winner === "BLUE" && c.key.startsWith("b")) classes.push("alliance-blue-winner");
-          }
+          if (["r1", "r2", "rpts", "rcow", "rstr"].includes(c.key)) classes.push("alliance-red-stat");
+          if (["b1", "b2", "bpts", "bcow", "bstr"].includes(c.key)) classes.push("alliance-blue-stat");
+          if (mineTeam != null && ["r1", "r2", "b1", "b2"].includes(c.key) &&
+              String(v).trim() === String(mineTeam).trim()) classes.push("selected-team-number");
         }
         tr.append(h("td", { class: classes.join(" ") }, displayValue(v)));
       });
@@ -677,7 +677,7 @@ RENDER.competition = async (params) => {
     rows: d.matches.rows.map(([iid, vals, tags]) => [iid, [...vals, "OPEN ↗"], tags]),
   };
   const matches = dataTable(table, {
-    id: "schedule-matches", sticky: 1, matchStyle: true, short: true,
+    id: "schedule-matches", sticky: 1, matchStyle: true, mineTeam: d.head.my_team, short: true,
     wrap: ["predicted", "actual"],
     empty: "Load an event to populate the matches table.",
     onRow: (label) => openMatchDetails(label),
