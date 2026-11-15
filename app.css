@@ -449,3 +449,27 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
   border: 0 !important;
   border-radius: 0 !important;
 }
+
+
+/* Settings: keep the Fidelity descriptions inside their own columns. */
+.grid-even > .card:first-child .form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  align-items: stretch;
+  gap: 12px 14px;
+}
+.grid-even > .card:first-child .form label.field {
+  min-width: 0;
+  align-self: stretch;
+}
+.grid-even > .card:first-child .form label.field > span {
+  display: block;
+  min-height: 3.6em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+@media (max-width: 600px) {
+  .grid-even > .card:first-child .form label.field > span {
+    min-height: 0;
+  }
+}
