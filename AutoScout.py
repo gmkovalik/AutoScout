@@ -6101,8 +6101,24 @@ class Session:
         self.compute()
 
     def refresh_results(self, client: FTCScoutClient) -> int:
-        """Re-fetch only the match list (cheap; for the live-meet loop). Returns matches played."""
-        payload = client.event_matches(self.season, self.event_code)
+        """Refresh current event team statistics and matches, retaining season history."""
+        self.event_info = client.event(self.season, self.event_code)
+        current_rows = client.event_teams(self.season, self.event_code)
+        current_stats = {}
+        for row in current_rows:
+            number = int(row["teamNumber"])
+            current_stats[number] = event_stat_from_json(number, self.season, self.event_code,
+                                                          row.get("stats"), self.event_info)
+            name = row.get("name") or row.get("teamName") or ""
+            if name:
+                self.team_names[number] = str(name)
+        if current_stats:
+            self.team_numbers = sorted(set(self.team_numbers) | set(current_stats))
+            for number, stat in current_stats.items():
+                history = [h for h in self.history.get(number, []) if h.event_code != self.event_code]
+                history.append(stat)
+                self.history[number] = history
+        payload = client.event_matches(self.season, self.event_code, max_age=0)
         self.api_matches = matches_from_json(payload)
         self.compute()
         return sum(1 for m in self.matches if m.played)
