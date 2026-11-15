@@ -333,3 +333,28 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
   .schedule-matches { max-height: 68vh; }
   .schedule-matches table { min-width: 1120px; }
 }
+
+
+/* Match table alliance identity colors. These override prediction-row fills only in alliance cells. */
+.schedule-matches .qual-number { color: #182236 !important; font-weight: 800; }
+.schedule-matches .alliance-red-stat {
+  background: rgba(192, 57, 43, .15) !important;
+  color: #a51f2d !important;
+  font-weight: 800;
+}
+.schedule-matches .alliance-blue-stat {
+  background: rgba(47, 111, 219, .15) !important;
+  color: #1e56a8 !important;
+  font-weight: 800;
+}
+.schedule-matches .selected-team-number {
+  background: #ffdf4d !important;
+  color: #111 !important;
+  font-weight: 900 !important;
+  box-shadow: inset 0 0 0 2px #d6a900;
+  border-radius: 4px;
+}
+.schedule-matches .t-mine td { color: inherit; }
+.schedule-matches .t-mine td.alliance-red-stat { color: #a51f2d !important; }
+.schedule-matches .t-mine td.alliance-blue-stat { color: #1e56a8 !important; }
+.schedule-matches .t-mine td.selected-team-number { color: #111 !important; }
