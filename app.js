@@ -664,11 +664,14 @@ RENDER.competition = async (params) => {
     list.append(row);
   }
   if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate Schedule Data." }));
+  const minutes = h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "68px" },
+    onchange: (e) => { S.auto.minutes = Math.max(1, Math.min(60, Number(e.target.value) || 2)); setAuto(S.auto.on); } });
   return [
     hero("COMPETITION DAY", "Schedule Data", d.head.loaded ? d.line : "Load an event to populate your match schedule."),
     metricsRow(d.metrics),
     h("div", { class: "row", style: { marginBottom: "14px" } },
       btn("Refresh all meet data", async () => { const r = await runAction("refresh", {}); toast(r.message, !r.ok); if (r.ok) rerender(); }, "primary"),
+      check("Auto-refresh every", S.auto.on, (v) => setAuto(v)), minutes, h("span", { class: "muted small", text: "min" }),
       btn("Open live scouting", () => go("live")), btn("Alliance selection", () => go("alliances")),
       h("span", { class: "spacer" }), btn("Save session", saveSession)),
     card("Match schedule", list,
