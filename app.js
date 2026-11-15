@@ -10,22 +10,38 @@
 const $ = (sel, el = document) => el.querySelector(sel);
 const PROPS = new Set(["value", "checked", "disabled", "selected", "htmlFor", "type", "min", "max", "step", "placeholder"]);
 
+function displayValue(value) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(displayValue).filter(Boolean).join(" · ");
+  if (typeof value === "object") {
+    for (const key of ["label", "name", "title", "team_name", "event_name", "text", "value", "number", "code"]) {
+      if (value[key] != null && value[key] !== value) {
+        const result = displayValue(value[key]);
+        if (result) return result;
+      }
+    }
+    try { return JSON.stringify(value); } catch (_) { return ""; }
+  }
+  return String(value);
+}
+
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   if (attrs) {
     for (const [k, v] of Object.entries(attrs)) {
       if (v == null || v === false) continue;
       if (k === "class") el.className = v;
-      else if (k === "text") el.textContent = v;
+      else if (k === "text") el.textContent = displayValue(v);
       else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
       else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
       else if (PROPS.has(k)) el[k] = v;
-      else el.setAttribute(k, v === true ? "" : String(v));
+      else el.setAttribute(k, v === true ? "" : displayValue(v));
     }
   }
   for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
-    el.append(kid instanceof Node ? kid : String(kid));
+    el.append(kid instanceof Node ? kid : displayValue(kid));
   }
   return el;
 }
@@ -49,7 +65,7 @@ function select(options, value, onchange) {
 function textInput(value, attrs = {}) { return h("input", { type: "text", value: value ?? "", ...attrs }); }
 function metricsRow(list) {
   return h("div", { class: "metrics" }, list.map((m) => h("div", { class: "metric" },
-    h("div", { class: "lab", text: m.label }), h("div", { class: "val", text: m.value || "-" }))));
+    h("div", { class: "lab", text: m.label }), h("div", { class: "val", text: displayValue(m.value) || "-" }))));
 }
 function hero(kicker, title, sub) {
   return h("div", { class: "hero" }, h("div", { class: "kicker", text: kicker }), h("h2", { text: title }), sub ? h("p", { text: sub }) : null);
@@ -264,7 +280,7 @@ function dataTable(t, opts = {}) {
             if (winner === "BLUE" && c.key.startsWith("b")) classes.push("alliance-blue-winner");
           }
         }
-        tr.append(h("td", { class: classes.join(" ") }, v == null ? "" : String(v)));
+        tr.append(h("td", { class: classes.join(" ") }, displayValue(v)));
       });
       tbody.append(tr);
     }
@@ -654,41 +670,21 @@ RENDER.overview = async () => {
 };
 
 RENDER.competition = async (params) => {
-  if (params.match) S.comp.match = params.match;
-  const d = await view("competition", { match: S.comp.match });
+  const d = await view("competition", {});
   if (d.head.loaded && !S.auto.initialized) { S.auto.initialized = true; setAuto(true); }
-  const my = d.head.my_team ? String(d.head.my_team) : "";
-  const list = h("div", { class: "matchlist" });
-  const sel = d.detail ? d.detail.label : null;
-  for (const [, [label, red, blue, forecast, status, winner, correct]] of d.matches.rows) {
-    const mine = my && red.split(" · ").concat(blue.split(" · ")).includes(my);
-    const chip = label === d.upcoming ? h("span", { class: "chip next", text: "Up next" })
-      : h("span", { class: "chip " + (status === "Played" ? "played" : ""), text: status });
-    const fc = String(forecast).match(/R (\d+)% \/ B (\d+)%/);
-    const qual = /^Q(?:ual)?[- ]?\d+/i.test(String(label));
-    list.append(h("button", { class: "matchrow" + (label === sel ? " on" : "") + (mine ? " mine" : ""), type: "button",
-      onclick: () => { S.comp.match = label; openMatchDetails(label); } },
-    h("span", { class: "lab" + (qual ? " qual-number" : ""), text: label }),
-    h("span", { class: "teams" },
-      h("span", { class: "side r" + (winner === "RED" ? " won" : ""), text: red }),
-      h("span", { class: "side b" + (winner === "BLUE" ? " won" : ""), text: blue })),
-    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }),
-      correct ? h("b", { class: correct === "✔" ? "match-correct" : "match-incorrect", text: correct }) : null, chip)));
-  }
-  if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate your match desk." }));
-  afterRender.push(() => {          // scroll the list itself, not the page
-    const on = list.querySelector(".matchrow.on");
-    if (on && (on.offsetTop < list.scrollTop || on.offsetTop + on.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = on.offsetTop - list.offsetTop - 8;
+  const table = {
+    columns: [...d.matches.columns, { key: "open", label: "MATCH DATA", align: "center" }],
+    rows: d.matches.rows.map(([iid, vals, tags]) => [iid, [...vals, "OPEN ↗"], tags]),
+  };
+  const matches = dataTable(table, {
+    id: "schedule-matches", sticky: 1, matchStyle: true, short: true,
+    wrap: ["predicted", "actual"],
+    empty: "Load an event to populate the matches table.",
+    onRow: (label) => openMatchDetails(label),
   });
-  const detail = d.detail
-    ? [h("h3", { class: "plain", text: d.detail.title, style: { fontSize: "20px", marginBottom: "8px" } }),
-      h("p", { class: "muted", text: "Select Open match details to see team names, current statistics, scores and scouting notes." }),
-      h("div", { class: "row", style: { marginTop: "10px", justifyContent: "flex-end" } },
-        btn("Open match details", () => openMatchDetails(d.detail.label), "primary"),
-        btn("Scout this match", () => { S.live.match = d.detail.label; go("live"); }))]
-    : [h("p", { class: "muted", text: "Select a match" })];
+  matches.classList.add("schedule-matches");
   return [
-    hero("COMPETITION DAY", "Everything you need between matches.", d.head.loaded ? d.line : "Load an event to populate your match desk."),
+    hero("COMPETITION DAY", "Everything you need between matches.", d.head.loaded ? d.line : "Load an event to populate your matches."),
     metricsRow(d.metrics),
     h("div", { class: "row", style: { marginBottom: "14px" } },
       btn("Refresh meet data", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
@@ -698,7 +694,7 @@ RENDER.competition = async (params) => {
       h("span", { class: "muted small", text: "min" }),
       btn("Open live scouting", () => go("live")), btn("Alliance selection", () => go("alliances")),
       btn("Team research", () => go("research")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
-    h("div", { class: "grid2" }, card("Match desk", list), card("Selected match", ...detail)),
+    card("Matches", matches),
   ];
 };
 
