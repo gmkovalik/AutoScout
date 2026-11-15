@@ -406,3 +406,37 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
   box-shadow: inset 0 0 0 1px #d6a900;
   border-radius: 4px;
 }
+
+
+/* Final Schedule Data match-table styling: solid alliance headers, black values, filled My Team cells. */
+.schedule-matches table.data {
+  width: max-content !important;
+  min-width: 0 !important;
+  table-layout: auto;
+}
+.schedule-matches table.data th.alliance-red-header,
+.schedule-matches table.data th.alliance-blue-header {
+  color: #fff !important;
+  font-weight: 800;
+  box-shadow: none !important;
+  border-bottom: 0 !important;
+}
+.schedule-matches table.data th.alliance-red-header {
+  background: #b42332 !important;
+}
+.schedule-matches table.data th.alliance-blue-header {
+  background: #245bb5 !important;
+}
+/* Data cells are always black, even when the whole match row is tagged as My Team. */
+.schedule-matches table.data tbody tr td {
+  color: #111 !important;
+}
+/* A solid fill, not an outline, and it takes precedence over match-result row shading. */
+.schedule-matches table.data tbody tr td.selected-team-number {
+  background: #ffdf4d !important;
+  color: #111 !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
