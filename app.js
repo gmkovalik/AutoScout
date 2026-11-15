@@ -260,10 +260,9 @@ function dataTable(t, opts = {}) {
     const thead = h("thead", null, h("tr", null, cols.map((c, i) => {
       const arrow = st && st.col === i ? (st.desc ? " ▼" : " ▲") : "";
       const heading = String(c.label || "").trim().toLowerCase();
-      // Match whole alliance words only: "pred." must not accidentally match "red".
       const headerSide = heading === "pred." ? "prediction-neutral-header" :
-        /\\bblue\\b/.test(heading) ? "alliance-blue-header" :
-        /\\bred\\b/.test(heading) ? "alliance-red-header" : "";
+        heading.includes("blue") ? "alliance-blue-header" :
+        heading.includes("red") ? "alliance-red-header" : "";
       return h("th", { class: [align(c), i < sticky ? "sticky" : "", headerSide].join(" "), scope: "col",
         onclick: () => { const cur = S.sort[id]; S.sort[id] = { col: i, desc: cur && cur.col === i ? !cur.desc : false }; draw(); } },
       c.label + arrow);

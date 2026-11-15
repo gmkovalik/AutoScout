@@ -427,6 +427,14 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .schedule-matches table.data th.alliance-blue-header {
   background: #245bb5 !important;
 }
+/* The standalone Pred. column uses the AutoScout brand maroon. */
+.schedule-matches table.data th.prediction-neutral-header {
+  color: #fff !important;
+  background: #5d081f !important;
+  font-weight: 800;
+  box-shadow: none !important;
+  border-bottom: 0 !important;
+}
 /* The standalone prediction header is neutral: maroon text without an alliance fill. */
 .schedule-matches table.data th.prediction-neutral-header {
   color: #5d081f !important;
