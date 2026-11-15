@@ -125,10 +125,11 @@ const S = {
 
 const PAGES = [
   ["WORKSPACE", [["overview", "Overview", "⌂", "Competition command center"],
-    ["competition", "Schedule Data", "\u2691\uFE0E", "Match schedule, results and detailed scouting"],
+    ["competition", "Competition Day", "\u2691\uFE0E", "Live event operations and match desk"],
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Your event team database"],
     ["research", "Team Research", "⌕", "Public FTC team intelligence"],
+    ["matches", "Matches", "\u26A1\uFE0E", "Match schedule and predictions"],
     ["myteam", "My Team", "\u2605\uFE0E", "Your team's performance"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
     ["alliances", "Alliances", "◇", "Alliance selection workspace"],
@@ -647,63 +648,161 @@ RENDER.competition = async (params) => {
   if (params.match) S.comp.match = params.match;
   const d = await view("competition", { match: S.comp.match });
   const my = d.head.my_team ? String(d.head.my_team) : "";
-  const list = h("div", { class: "schedule-list" });
-  for (const [label, red, blue, correct, winner, status] of d.matches.rows) {
+  const list = h("div", { class: "matchlist" });
+  const sel = d.detail ? d.detail.label : null;
+  for (const [, [label, red, blue, forecast, status]] of d.matches.rows) {
     const mine = my && red.split(" · ").concat(blue.split(" · ")).includes(my);
-    const mark = correct === "" ? "—" : (correct === true ? "✓" : "✕");
-    const markClass = correct === "" ? "pending" : (correct === true ? "correct" : "incorrect");
-    const row = h("article", { class: "schedule-row" + (mine ? " mine" : "") },
-      h("button", { class: "qual-button " + markClass, type: "button", onclick: () => openMatchDetails(label) },
-        h("b", { text: label }), h("span", { text: mark })),
-      h("div", { class: "alliance-pair" },
-        h("button", { class: "alliance red" + (status === "Played" && winner === "RED" ? " winner" : ""), type: "button", onclick: () => openMatchDetails(label) },
-          h("b", { text: "RED" }), h("span", { text: red })),
-        h("button", { class: "alliance blue" + (status === "Played" && winner === "BLUE" ? " winner" : ""), type: "button", onclick: () => openMatchDetails(label) },
-          h("b", { text: "BLUE" }), h("span", { text: blue }))),
-      h("button", { class: "btn small outline", type: "button", onclick: () => openMatchDetails(label) }, "Open"));
-    list.append(row);
+    const chip = label === d.upcoming ? h("span", { class: "chip next", text: "Up next" })
+      : h("span", { class: "chip " + (status === "Played" ? "played" : ""), text: status });
+    const fc = String(forecast).match(/R (\d+)% \/ B (\d+)%/);
+    list.append(h("button", { class: "matchrow" + (label === sel ? " on" : "") + (mine ? " mine" : ""), type: "button",
+      onclick: () => { S.comp.match = label; rerender(); } },
+    h("span", { class: "lab", text: label }),
+    h("span", { class: "teams" }, h("span", { class: "side r", text: red }), h("span", { class: "side b", text: blue })),
+    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }), chip)));
   }
-  if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate Schedule Data." }));
-  const minutes = h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "68px" },
-    onchange: (e) => { S.auto.minutes = Math.max(1, Math.min(60, Number(e.target.value) || 2)); setAuto(S.auto.on); } });
+  if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate your match desk." }));
+  afterRender.push(() => {          // scroll the list itself, not the page
+    const on = list.querySelector(".matchrow.on");
+    if (on && (on.offsetTop < list.scrollTop || on.offsetTop + on.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = on.offsetTop - list.offsetTop - 8;
+  });
+  const detail = d.detail
+    ? [h("h3", { class: "plain", text: d.detail.title, style: { fontSize: "20px", marginBottom: "8px" } }),
+      h("div", { class: "detail", text: d.detail.text }),
+      h("div", { class: "row", style: { marginTop: "10px", justifyContent: "flex-end" } },
+        btn("Scout this match", () => { S.live.match = d.detail.label; go("live"); }, "primary"))]
+    : [h("p", { class: "muted", text: "Select a match" })];
   return [
-    hero("COMPETITION DAY", "Schedule Data", d.head.loaded ? d.line : "Load an event to populate your match schedule."),
+    hero("COMPETITION DAY", "Everything you need between matches.", d.head.loaded ? d.line : "Load an event to populate your match desk."),
     metricsRow(d.metrics),
     h("div", { class: "row", style: { marginBottom: "14px" } },
-      btn("Refresh all meet data", async () => { const r = await runAction("refresh", {}); toast(r.message, !r.ok); if (r.ok) rerender(); }, "primary"),
-      check("Auto-refresh every", S.auto.on, (v) => setAuto(v)), minutes, h("span", { class: "muted small", text: "min" }),
+      btn("Refresh results", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
       btn("Open live scouting", () => go("live")), btn("Alliance selection", () => go("alliances")),
-      h("span", { class: "spacer" }), btn("Save session", saveSession)),
-    card("Match schedule", list,
-      h("p", { class: "note", text: "Open any match to view team names, predictions, results and scouting notes. Green or red marks indicate prediction correctness." })),
+      btn("Team research", () => go("research")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
+    h("div", { class: "grid2" }, card("Match desk", list), card("Selected match", ...detail)),
   ];
 };
-async function openMatchDetails(label) {
-  const d = await view("competition", { match: label });
-  const full = await view("matches");
-  const detail = d.detail;
-  const cols = full.table.columns;
-  const found = full.table.rows.find((r) => String(r[0]) === String(label));
-  const values = found ? found[1] : [];
-  const statGrid = h("div", { class: "match-stat-grid" });
-  cols.forEach((col, i) => {
-    if (values[i] == null || values[i] === "") return;
-    statGrid.append(h("div", { class: "match-stat" }, h("span", { class: "muted small", text: col.label }), h("b", { text: String(values[i]) })));
+
+RENDER.setup = async () => {
+  const d = await view("setup");
+  const season = h("input", { type: "number", value: d.season, min: 2019, max: 2100, inputmode: "numeric" });
+  const team = h("input", { type: "number", value: d.team, inputmode: "numeric", placeholder: "e.g. 12928" });
+  const extra = textInput(d.extra, { placeholder: "e.g. 11225 19013" });
+  const search = h("input", { type: "search", value: S.eventSearch.query, placeholder: "Search by meet name or event code", autocomplete: "off" });
+  const searchStatus = h("div", { class: "status", text: S.eventSearch.status || "Search FTCScout events for the selected season." });
+  const results = h("div", { class: "switchlist event-results" });
+  let offline = d.offline, history = true;
+  const schedule = h("textarea", { rows: 7, spellcheck: "false", placeholder: "Q-1  11225 19013  19564 23213" });
+  schedule.value = d.schedule || "";
+  team.addEventListener("change", async () => { await runAction("my_team", { team: team.value }, false); });
+  season.addEventListener("change", () => {
+    S.eventSearch.results = [];
+    S.eventSearch.status = "Season changed. Search again to find events in this season.";
+    drawResults();
+    searchStatus.textContent = S.eventSearch.status;
   });
-  const alliance = (side, cls) => h("div", { class: "detail-alliance " + cls },
-    h("h3", { text: side === "red" ? "RED ALLIANCE" : "BLUE ALLIANCE" }),
-    ...(detail[side] || []).map((number) => h("button", { class: "team-pick", type: "button",
-      onclick: () => { S.live.match = label; S.live.team = String(number); go("live"); } },
-      h("b", { text: String(number) }), h("span", { text: detail.team_names[String(number)] || "Team name unavailable" }),
-      h("span", { class: "muted small", text: "Select and take notes" }))));
-  modal((close) => [
-    h("button", { class: "btn small close", onclick: close, "aria-label": "Close" }, "✕"),
-    h("h2", { text: label + " match details" }),
-    alliance("red", "red"), alliance("blue", "blue"),
-    h("h3", { class: "plain", text: "Match statistics" }), statGrid,
-    h("div", { class: "detail", text: detail.text }),
-    h("div", { class: "foot" }, btn("Scout this match", () => { S.live.match = label; go("live"); }, "primary"), btn("Close", close)),
-  ], { wide: true });
+  search.addEventListener("input", () => {
+    S.eventSearch.query = search.value;
+    S.eventSearch.results = [];
+    S.eventSearch.status = "";
+    drawResults();
+    searchStatus.textContent = "Press Search meets to search again.";
+  });
+  const args = (code) => ({ season: season.value, event: code, team: team.value, extra: extra.value,
+    offline, history, schedule: schedule.value });
+  async function chooseEvent(ev) {
+    S.eventSearch.status = "Loading " + (ev.name || ev.code) + "…";
+    await loadEvent({ ...args(ev.code), season: ev.season || season.value });
+  }
+  function drawResults() {
+    results.textContent = "";
+    for (const ev of S.eventSearch.results) {
+      results.append(h("button", { type: "button", class: "event-result", onclick: () => chooseEvent(ev) },
+        h("span", null, h("b", { text: ev.name || ev.code }), h("small", { text: ev.meta || ev.code })),
+        h("span", { class: "event-load-label", text: "Load event →" })));
+    }
+    results.hidden = !S.eventSearch.results.length;
+  }
+  async function searchEvents() {
+    const query = search.value.trim();
+    S.eventSearch.query = query;
+    if (!query) {
+      S.eventSearch.status = "Enter a meet name or event code to search.";
+      searchStatus.textContent = S.eventSearch.status;
+      return;
+    }
+    if (offline) {
+      S.eventSearch.status = "Event search needs an internet connection. Turn off Offline in Advanced options.";
+      searchStatus.textContent = S.eventSearch.status;
+      return;
+    }
+    searchStatus.textContent = "Searching FTCScout…";
+    const r = await runAction("events_search", { season: season.value, query: query }, false);
+    if (!r.ok) {
+      S.eventSearch.results = [];
+      S.eventSearch.status = r.message || "Could not search events.";
+    } else {
+      S.eventSearch.results = r.results || [];
+      S.eventSearch.status = r.message || (S.eventSearch.results.length ? "Select a meet to load it." : "No matching meets found.");
+    }
+    await rerender();
+  }
+  const searchBtn = btn("Search meets", searchEvents, "primary");
+  search.addEventListener("keydown", (e) => { if (e.key === "Enter") searchEvents(); });
+  drawResults();
+  searchStatus.textContent = S.eventSearch.status || "Search FTCScout events for the selected season.";
+  const fileIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = await runAction("import", { text: await f.text() });
+    if (r.ok) rerender();
+  } });
+  const sessions = h("div", { class: "sessions" });
+  if (!d.sessions.length) sessions.append(h("p", { class: "muted", text: "No sessions saved in this browser yet. Loading an event saves one automatically." }));
+  for (const s of d.sessions) {
+    const current = d.head.path === s.file;
+    sessions.append(h("div", { class: "sess" + (current ? " current" : "") },
+      h("div", { class: "info" }, h("b", { text: s.event || s.code }),
+        h("span", { class: "muted small", text: s.season + "/" + s.code + " · " + s.teams + " teams" + (s.my_team ? " · team " + s.my_team : "") + " · saved " + s.saved + (current ? " · open now" : "") })),
+      current ? null : btn("Open", async () => { const r = await runAction("open_saved", { file: s.file }); if (r.ok) rerender(); }, "small"),
+      btn("Delete", () => confirmDialog("Delete saved session?", (s.event || s.code) + " will be removed from this browser. Download it first if you want a copy.", "Delete",
+        async () => { await runAction("delete_saved", { file: s.file }); rerender(); }), "small danger")));
+  }
+  return [
+    card("Meet",
+      h("p", { class: "muted", text: "Find your competition by meet name or event code. Choose a result to load it automatically." }),
+      h("div", { class: "form" }, field("Season", season), field("My team number", team)),
+      h("div", { class: "row", style: { marginTop: "10px" } }, field("Find a meet", search, "wide"), searchBtn),
+      searchStatus, results,
+      h("details", { class: "adv" }, h("summary", { text: "Advanced options" }), h("div", null,
+        field("Extra team numbers (optional)", extra),
+        check("Offline (cache only - never touch the network)", offline, (v) => { offline = v; }),
+        check("Fetch each team's season history (needed for projected OPR)", history, (v) => { history = v; }))),
+      h("div", { class: "row", style: { marginTop: "14px" } },
+        h("div", { class: "progress", id: "setupProgress" }, h("div", { style: { width: (loadUI.frac * 100).toFixed(0) + "%" } }))),
+      h("div", { class: "status", id: "setupStatus", text: S.loading ? loadUI.msg : "A big event takes a few minutes the first time: every team's season history is downloaded." })),
+    card("Sessions saved in this browser", sessions,
+      h("div", { class: "row", style: { marginTop: "12px" } }, fileIn,
+        btn("Open session file…", () => fileIn.click()),
+        btn("Download session file", () => exportFile("session"), ""),
+        btn("New session", () => confirmDialog("Start a new session?", "The current session stays saved in this browser.", "New session",
+          async () => { await runAction("new", {}, false); rerender(); }))),
+      h("p", { class: "note", text: "Session files are the same .json the desktop app opens and saves, so you can move a session between the desktop app, this site and other phones." })),
+    card("Paste schedule (used when FTCScout has no schedule)",
+      h("pre", { class: "muted small", style: { margin: "0 0 8px", whiteSpace: "pre-wrap" }, text:
+        "One match per line - the first two team numbers are red, the next two blue.\n    Q-1  11225 19013  19564 23213\n    1    11225 19013 vs 19564 23213   104-66\nA trailing red-blue score marks the match as played." }),
+      schedule,
+      h("div", { class: "row" }, btn("Use pasted schedule", async () => { const r = await runAction("schedule", { season: season.value, team: team.value, extra: extra.value, schedule: schedule.value }); if (r.ok) rerender(); }))),
+    card("Loaded event", h("div", { class: "pre", text: d.info })),
+  ];
+};
+
+function exportFile(kind) {
+  runAction("export", { kind }, false).then((r) => { if (r.ok) download(r.name, r.text, r.mime); });
+}
+async function saveSession() {
+  const r = await runAction("save", {});
+  if (r.ok && S.page === "setup") rerender();
 }
 
 // ---- Teams (+ the team sheet) ---------------------------------------------
@@ -845,8 +944,7 @@ RENDER.research = async () => {
 };
 
 // ---- Matches ---------------------------------------------------------------
-RENDER.matches = async (params) => RENDER.competition(params);
-RENDER.matches_legacy = async (params) => {
+RENDER.matches = async (params) => {
   const d = await view("matches");
   const cols = d.table.columns.map((c) => c.key);
   const minutes = h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "70px" }, onchange: (e) => {
@@ -868,7 +966,7 @@ function setAuto(on) {
   if (on) S.auto.timer = setInterval(async () => {
     if (S.loading) return;
     const r = await runAction("refresh", {}, false);
-    if (r.ok) rerender();
+    if (r.ok && ["matches", "competition", "standings", "myteam", "analysis", "overview"].includes(S.page)) rerender();
   }, S.auto.minutes * 60000);
 }
 function resultDialog(label, vals, cols) {
@@ -1061,35 +1159,6 @@ RENDER.live = async () => {
   ];
 };
 
-async function syncSharedNotes(endpoint, localNotes) {
-  if (!endpoint) { toast("Add the Google Sheets web app URL in Settings first.", true); return; }
-  try {
-    const key = (m, n) => [m, n.time || "", n.team || "", n.phase || "", n.text || ""].join("\u001f");
-    const remoteResponse = await fetch(endpoint, { method: "GET", cache: "no-store" });
-    if (!remoteResponse.ok) throw new Error("Could not read the shared Google Sheet.");
-    const remote = await remoteResponse.json();
-    const merged = new Map();
-    for (const [match, notes] of Object.entries(localNotes || {}))
-      for (const note of notes) merged.set(key(match, note), { match, ...note });
-    for (const note of (remote.notes || []))
-      merged.set(key(note.match || "General", note), { ...note, match: note.match || "General" });
-    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ notes: [...merged.values()] }) });
-    if (!response.ok) throw new Error("Google Sheets did not accept the notes.");
-    const result = await response.json();
-    const grouped = {};
-    for (const note of (result.notes || [...merged.values()])) {
-      const match = note.match || "General";
-      grouped[match] ||= [];
-      grouped[match].push({ time: note.time || "", team: note.team || "General", phase: note.phase || "Overall", text: note.text || "" });
-    }
-    const saved = await runAction("notes_replace", { notes: grouped }, false);
-    if (!saved.ok) throw new Error(saved.message || "Could not save the merged notes.");
-    toast("Shared scouting notes are synchronized.");
-    if (S.page === "live") rerender();
-  } catch (e) { toast("Google Sheets sync failed: " + e.message, true); }
-}
-
 function notesCard(d, update) {
   if (!d.matches.length) return card("Match notes", h("p", { class: "muted", text: "Load or paste a match schedule before adding match-specific notes." }));
   const counts = d.note_counts || {};
@@ -1115,7 +1184,6 @@ function notesCard(d, update) {
         const r = await runAction("note_add", { match: d.match, team: team.value, phase: phase.value, text: text.value });
         if (r.ok) update({});
       }, "primary"),
-      d.notes_storage === "google" && d.google_sheet_url ? btn("Sync shared notes", () => syncSharedNotes(d.google_sheet_url, d.all_notes), "small") : null,
       h("span", { class: "spacer" }), btn("Save session", saveSession)),
     list);
 }
@@ -1128,9 +1196,6 @@ RENDER.settings = async () => {
   const apply = async (patch) => { Object.assign(st, patch); await runAction("settings", st, false); rerender(); };
   const num = (v, key, w = "90px") => h("input", { type: "number", step: "any", value: v, style: { width: w }, onchange: (e) => { st[key] = e.target.value; } });
   const k0 = num(d.k0, "k0"), kmin = num(d.kmin, "kmin"), mpt = num(d.mpt, "mpt"), margin = num(d.margin, "margin");
-  const sheetUrl = h("input", { type: "url", value: d.google_sheet_url || "", placeholder: "https://script.google.com/macros/s/.../exec" });
-  const notesMode = select([["local", "Store notes on this device"], ["google", "Share notes with Google Sheets"]],
-    d.notes_storage || "local", async (v) => { const r = await runAction("notes_settings", { storage: v, url: sheetUrl.value }, false); if (!r.ok) toast(r.message, true); });
   for (const el of [k0, kmin]) el.addEventListener("change", () => apply({}));
   return [
     card("Predictions are based on",
@@ -1151,12 +1216,6 @@ RENDER.settings = async () => {
         h("div", { class: "form" }, field("Matches per team (blank = count from the schedule)", mpt), field("Margin points (Sheet18: trust the call only above this)", margin)),
         h("div", { class: "row" }, check('Show the "potential of accuracy" column on Matches (experimental)', d.poa, (v) => { st.poa = v; })),
         h("div", { class: "row" }, btn("Apply", () => apply({}), "primary")))),
-    card("Scouting notes storage",
-      h("p", { class: "note", text: "Notes stay on this device unless you choose shared Google Sheets storage." }),
-      field("Storage preference", notesMode), field("Google Apps Script web app URL", sheetUrl, "wide"),
-      h("div", { class: "row" },
-        btn("Save notes settings", async () => { const r = await runAction("notes_settings", { storage: notesMode.value, url: sheetUrl.value }, false); toast(r.message, !r.ok); }, "primary"),
-        btn("Sync notes now", async () => { const r = await runAction("notes_settings", { storage: "google", url: sheetUrl.value }, false); if (!r.ok) { toast(r.message, true); return; } const d = await view("live", { match: S.live.match }); await syncSharedNotes(sheetUrl.value, d.all_notes); }))),
     h("div", { class: "grid-even", style: { marginBottom: "14px" } },
       card("Cache",
         h("p", { class: "muted", text: d.cache_count == null ? "FTCScout responses are cached in this browser." : `${d.cache_count} FTCScout responses cached in this browser.` }),
