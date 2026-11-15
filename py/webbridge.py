@@ -403,7 +403,8 @@ def view_competition(o):
     matches_table = view_matches({})["table"]
     # Keep the full Matches-tab statistics in Schedule Data, not a reduced matchup list.
     # The browser adds an Open action to each row for the existing detailed match dialog.
-    return {"line": p.event_line.cfg.get("text", ""),
+    return {"head": _head(),
+            "line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
             "matches": matches_table, "upcoming": upcoming}
