@@ -435,12 +435,7 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
   box-shadow: none !important;
   border-bottom: 0 !important;
 }
-/* The standalone prediction header is neutral: maroon text without an alliance fill. */
-.schedule-matches table.data th.prediction-neutral-header {
-  color: #5d081f !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
+
 /* Data cells are always black, even when the whole match row is tagged as My Team. */
 .schedule-matches table.data tbody tr td {
   color: #111 !important;
