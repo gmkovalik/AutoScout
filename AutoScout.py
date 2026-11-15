@@ -1356,11 +1356,11 @@ class FTCScoutClient:
         q = urllib.parse.quote(str(text).strip(), safe="")
         return self.get_json(f"teams/search?searchText={q}&limit={int(limit)}", max_age=3600)
 
-    def event(self, season: int, code: str) -> dict:
-        return self.get_json(f"events/{int(season)}/{code.strip().upper()}", max_age=86400)
+    def event(self, season: int, code: str, max_age: float = 86400) -> dict:
+        return self.get_json(f"events/{int(season)}/{code.strip().upper()}", max_age=max_age)
 
-    def event_teams(self, season: int, code: str) -> list:
-        return self.get_json(f"events/{int(season)}/{code.strip().upper()}/teams")
+    def event_teams(self, season: int, code: str, max_age: Optional[float] = None) -> list:
+        return self.get_json(f"events/{int(season)}/{code.strip().upper()}/teams", max_age=max_age)
 
     def event_matches(self, season: int, code: str, max_age: float = 60) -> list:
         return self.get_json(f"events/{int(season)}/{code.strip().upper()}/matches", max_age=max_age)
@@ -6102,8 +6102,8 @@ class Session:
 
     def refresh_results(self, client: FTCScoutClient) -> int:
         """Refresh current event team statistics and matches, retaining season history."""
-        self.event_info = client.event(self.season, self.event_code)
-        current_rows = client.event_teams(self.season, self.event_code)
+        self.event_info = client.event(self.season, self.event_code, max_age=0)
+        current_rows = client.event_teams(self.season, self.event_code, max_age=0)
         current_stats = {}
         for row in current_rows:
             number = int(row["teamNumber"])
