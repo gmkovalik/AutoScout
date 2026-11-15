@@ -408,8 +408,12 @@ def view_competition(o):
     return {"line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS"],
-                                     p.match_tree.inserted),
+            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS", "WINNER", "CORRECT"],
+                                     [(row[0], row[1], row[2], row[3], row[4],
+                                       next((m.winner or "" for m in s.matches if m.label == row[0]), ""),
+                                       ("✔" if next((x.correct for x in s.predictions if x.match.label == row[0]), None) is True else
+                                        "✘" if next((x.correct for x in s.predictions if x.match.label == row[0]), None) is False else ""))
+                                      for row in p.match_tree.inserted]),
             "upcoming": upcoming, "detail": detail}
 
 
