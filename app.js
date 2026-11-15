@@ -259,7 +259,9 @@ function dataTable(t, opts = {}) {
     }
     const thead = h("thead", null, h("tr", null, cols.map((c, i) => {
       const arrow = st && st.col === i ? (st.desc ? " ▼" : " ▲") : "";
-      return h("th", { class: [align(c), i < sticky ? "sticky" : ""].join(" "), scope: "col",
+      const headerSide = ["r1", "r2", "rpts", "rcow", "rstr"].includes(c.key) ? "alliance-red-header" :
+        ["b1", "b2", "bpts", "bcow", "bstr"].includes(c.key) ? "alliance-blue-header" : "";
+      return h("th", { class: [align(c), i < sticky ? "sticky" : "", headerSide].join(" "), scope: "col",
         onclick: () => { const cur = S.sort[id]; S.sort[id] = { col: i, desc: cur && cur.col === i ? !cur.desc : false }; draw(); } },
       c.label + arrow);
     })));
@@ -273,17 +275,10 @@ function dataTable(t, opts = {}) {
         const classes = [align(c), i < sticky ? "sticky" : "", wrap.includes(c.key) ? "wrap" : ""];
         if (matchStyle) {
           if (c.key === "label" && /^Q(?:ual)?[- ]?\d+/i.test(String(v))) classes.push("qual-number");
-          if (c.key === "ok" && (String(v) === "✔" || String(v) === "✘")) classes.push(String(v) === "✔" ? "match-correct" : "match-incorrect");
-          const redKeys = ["r1", "r2", "rpts", "rcow", "rstr"];
-          const blueKeys = ["b1", "b2", "bpts", "bcow", "bstr"];
-          if (redKeys.includes(c.key)) classes.push("alliance-red-stat");
-          if (blueKeys.includes(c.key)) classes.push("alliance-blue-stat");
-          if (["pred", "actual"].includes(c.key)) {
-            if (String(v).trim().toUpperCase() === "RED") classes.push("alliance-red-stat");
-            if (String(v).trim().toUpperCase() === "BLUE") classes.push("alliance-blue-stat");
-          }
+          if (["r1", "r2", "rpts", "rcow", "rstr"].includes(c.key)) classes.push("alliance-red-stat");
+          if (["b1", "b2", "bpts", "bcow", "bstr"].includes(c.key)) classes.push("alliance-blue-stat");
           if (mineTeam != null && ["r1", "r2", "b1", "b2"].includes(c.key) &&
-              String(v).trim() === String(mineTeam)) classes.push("selected-team-number");
+              String(v).trim() === String(mineTeam).trim()) classes.push("selected-team-number");
         }
         tr.append(h("td", { class: classes.join(" ") }, displayValue(v)));
       });
