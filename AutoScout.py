@@ -1356,11 +1356,11 @@ class FTCScoutClient:
         q = urllib.parse.quote(str(text).strip(), safe="")
         return self.get_json(f"teams/search?searchText={q}&limit={int(limit)}", max_age=3600)
 
-    def event(self, season: int, code: str) -> dict:
-        return self.get_json(f"events/{int(season)}/{code.strip().upper()}", max_age=86400)
+    def event(self, season: int, code: str, max_age: float = 86400) -> dict:
+        return self.get_json(f"events/{int(season)}/{code.strip().upper()}", max_age=max_age)
 
-    def event_teams(self, season: int, code: str) -> list:
-        return self.get_json(f"events/{int(season)}/{code.strip().upper()}/teams")
+    def event_teams(self, season: int, code: str, max_age: float = 300) -> list:
+        return self.get_json(f"events/{int(season)}/{code.strip().upper()}/teams", max_age=max_age)
 
     def event_matches(self, season: int, code: str, max_age: float = 60) -> list:
         return self.get_json(f"events/{int(season)}/{code.strip().upper()}/matches", max_age=max_age)
@@ -6100,12 +6100,36 @@ class Session:
         self.loaded_at = datetime.datetime.now().isoformat(timespec="seconds")
         self.compute()
 
-    def refresh_results(self, client: FTCScoutClient) -> int:
-        """Re-fetch only the match list (cheap; for the live-meet loop). Returns matches played."""
-        payload = client.event_matches(self.season, self.event_code)
+    def refresh_live_data(self, client: FTCScoutClient) -> int:
+        """Refresh current event team statistics and match results without re-downloading season history."""
+        info = client.event(self.season, self.event_code, max_age=0)
+        rows = client.event_teams(self.season, self.event_code, max_age=0)
+        payload = client.event_matches(self.season, self.event_code, max_age=0)
+        current_code = self.event_code.strip().upper()
+        fresh_numbers = []
+        for row in rows:
+            number = int(row["teamNumber"])
+            fresh_numbers.append(number)
+            fresh = event_stat_from_json(number, self.season, current_code, row.get("stats"), info)
+            history = [h for h in self.history.get(number, []) if h.event_code != current_code]
+            history.append(fresh)
+            self.history[number] = history
+            if number not in self.team_names:
+                try:
+                    self.team_names[number] = client.team(number).get("name", "") or ""
+                except ApiError:
+                    self.team_names[number] = ""
+        self.team_numbers = sorted(set(fresh_numbers) | set(self.extra_teams))
+        self.event_info = info or self.event_info
         self.api_matches = matches_from_json(payload)
+        import datetime
+        self.loaded_at = datetime.datetime.now().isoformat(timespec="seconds")
         self.compute()
         return sum(1 for m in self.matches if m.played)
+
+    def refresh_results(self, client: FTCScoutClient) -> int:
+        """Compatibility wrapper for callers that only need current live event data."""
+        return self.refresh_live_data(client)
 
     def compute(self) -> None:
         """Rebuild teams → matches → predictions → standings from current inputs."""
