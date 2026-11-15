@@ -404,25 +404,12 @@ def view_competition(o):
     detail = None
     if label:
         p._show_match(label)
-        match = next((m for m in s.matches if m.label == label), None)
-        detail = {"label": label, "title": p.detail_title.get(), "text": p.detail_text.text,
-                  "red": list(match.red) if match else [], "blue": list(match.blue) if match else [],
-                  "team_names": {str(n): s.team_names.get(n, "Team name unavailable")
-                                 for n in (match.teams if match else [])}}
-    rows = []
-    predictions = {x.match.label: x for x in s.predictions}
-    for match in s.matches:
-        pred = predictions.get(match.label)
-        rows.append([match.label, " · ".join(str(n) for n in match.red),
-                     " · ".join(str(n) for n in match.blue),
-                     "" if pred is None or pred.correct is None else bool(pred.correct),
-                     match.winner or "", "Played" if match.played else "Upcoming"])
+        detail = {"label": label, "title": p.detail_title.get(), "text": p.detail_text.text}
     return {"line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": {"columns": [{"key": k, "label": k} for k in
-                                    ("MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "CORRECT", "WINNER", "STATUS")],
-                        "rows": rows},
+            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS"],
+                                     p.match_tree.inserted),
             "upcoming": upcoming, "detail": detail}
 
 
@@ -589,11 +576,9 @@ def view_live(o):
     notes = s.live_notes.get(match, []) if match else []
     return {"matches": labels, "match": match, "teams": ["- alliance / general -"] + [str(n) for n in sorted(s.teams)],
             "phases": ["Overall", "Autonomous", "TeleOp", "Endgame", "Between matches"],
-            "notes": notes, "all_notes": s.live_notes, "stream": s.live_stream_url, "query": default_query,
+            "notes": notes, "stream": s.live_stream_url, "query": default_query,
             "note_counts": {k: len(v) for k, v in s.live_notes.items() if v},
-            "match_teams": next(([list(m.red), list(m.blue)] for m in s.matches if m.label == match), None),
-            "notes_storage": A.config.get("notes_storage", "local"),
-            "google_sheet_url": A.config.get("google_sheet_url", "")}
+            "match_teams": next(([list(m.red), list(m.blue)] for m in s.matches if m.label == match), None)}
 
 
 def view_research(o):
@@ -618,8 +603,6 @@ def view_settings(o):
             "tristate": list(A.TRISTATE), "mpt": p.mpt_var.get(), "margin": p.margin_var.get(),
             "poa": bool(p.poa_var.get()), "cache_count": n_cache,
             "offline": bool(A.config.get("offline", False)),
-            "notes_storage": A.config.get("notes_storage", "local"),
-            "google_sheet_url": A.config.get("google_sheet_url", ""),
             "about": {"title": f"{A.APP_FULL_TITLE} {A.__version__} - {A.APP_TAGLINE}",
                       "blurb": A.APP_BLURB, "org": A.APP_ORG_FULL, "website": A.APP_WEBSITE}}
 
@@ -841,32 +824,6 @@ def act_note_delete(a):
     return {"ok": True}
 
 
-def act_notes_settings(a):
-    mode = "google" if a.get("storage") == "google" else "local"
-    endpoint = str(a.get("url") or "").strip()
-    if mode == "google" and not endpoint.startswith("https://script.google.com/"):
-        return {"ok": False, "message": "Enter a deployed Google Apps Script web app URL."}
-    A.config.save({"notes_storage": mode, "google_sheet_url": endpoint})
-    return {"ok": True, "message": "Scouting notes storage settings saved."}
-
-
-def act_notes_replace(a):
-    notes = a.get("notes")
-    if not isinstance(notes, dict):
-        return {"ok": False, "message": "Shared notes data was not valid."}
-    clean = {}
-    for match, items in notes.items():
-        if not isinstance(items, list):
-            continue
-        clean[str(match)] = []
-        for item in items:
-            if isinstance(item, dict) and str(item.get("text") or "").strip():
-                clean[str(match)].append({k: str(item.get(k) or "") for k in ("time", "team", "phase", "text")})
-    APP.session.live_notes = clean
-    _autosave()
-    return {"ok": True}
-
-
 def act_stream(a):
     url = (a.get("url") or "").strip()
     if url and not (url.startswith("https://www.youtube.com/") or url.startswith("https://youtube.com/")
@@ -995,8 +952,7 @@ def act_export(a):
 ACTIONS = {"load": act_load, "events_search": act_events_search, "schedule": act_schedule, "my_team": act_my_team, "refresh": act_refresh,
            "team_edit": act_team_edit, "overrides": act_overrides, "result": act_result,
            "settings": act_settings, "clear_cache": act_clear_cache, "offline": act_offline,
-           "note_add": act_note_add, "note_delete": act_note_delete,
-           "notes_settings": act_notes_settings, "notes_replace": act_notes_replace, "stream": act_stream,
+           "note_add": act_note_add, "note_delete": act_note_delete, "stream": act_stream,
            "youtube": act_youtube, "research_search": act_research_search,
            "research_load": act_research_load, "save": act_save, "open_saved": act_open_saved,
            "delete_saved": act_delete_saved, "import": act_import, "new": act_new, "export": act_export}
