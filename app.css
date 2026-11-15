@@ -427,11 +427,13 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .schedule-matches table.data th.alliance-blue-header {
   background: #245bb5 !important;
 }
-/* The standalone prediction header is neutral: maroon text without an alliance fill. */
+/* The standalone Pred. header uses the brand maroon, not an alliance color. */
 .schedule-matches table.data th.prediction-neutral-header {
-  color: #5d081f !important;
-  background: transparent !important;
+  color: #fff !important;
+  background: #5d081f !important;
+  font-weight: 800;
   box-shadow: none !important;
+  border-bottom: 0 !important;
 }
 /* Data cells are always black, even when the whole match row is tagged as My Team. */
 .schedule-matches table.data tbody tr td {
