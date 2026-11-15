@@ -660,16 +660,20 @@ RENDER.competition = async (params) => {
   const my = d.head.my_team ? String(d.head.my_team) : "";
   const list = h("div", { class: "matchlist" });
   const sel = d.detail ? d.detail.label : null;
-  for (const [, [label, red, blue, forecast, status]] of d.matches.rows) {
+  for (const [, [label, red, blue, forecast, status, winner, correct]] of d.matches.rows) {
     const mine = my && red.split(" · ").concat(blue.split(" · ")).includes(my);
     const chip = label === d.upcoming ? h("span", { class: "chip next", text: "Up next" })
       : h("span", { class: "chip " + (status === "Played" ? "played" : ""), text: status });
     const fc = String(forecast).match(/R (\d+)% \/ B (\d+)%/);
+    const qual = /^Q(?:ual)?[- ]?\d+/i.test(String(label));
     list.append(h("button", { class: "matchrow" + (label === sel ? " on" : "") + (mine ? " mine" : ""), type: "button",
       onclick: () => { S.comp.match = label; openMatchDetails(label); } },
-    h("span", { class: "lab", text: label }),
-    h("span", { class: "teams" }, h("span", { class: "side r", text: red }), h("span", { class: "side b", text: blue })),
-    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }), chip)));
+    h("span", { class: "lab" + (qual ? " qual-number" : ""), text: label }),
+    h("span", { class: "teams" },
+      h("span", { class: "side r" + (winner === "RED" ? " won" : ""), text: red }),
+      h("span", { class: "side b" + (winner === "BLUE" ? " won" : ""), text: blue })),
+    h("span", { class: "fc" }, fc ? h("b", { text: `R ${fc[1]}%  B ${fc[2]}%` }) : h("b", { text: "-" }),
+      correct ? h("b", { class: correct === "✔" ? "match-correct" : "match-incorrect", text: correct }) : null, chip)));
   }
   if (!d.matches.rows.length) list.append(h("div", { class: "empty", text: "Load an event to populate your match desk." }));
   afterRender.push(() => {          // scroll the list itself, not the page
