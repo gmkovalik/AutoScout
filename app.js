@@ -120,7 +120,7 @@ const S = {
   boot: null, head: null, page: "overview", params: {}, sort: {}, loading: false,
   comp: {}, panel: {}, all: {}, pairs: {}, chartsPage: "team", live: {}, research: { results: [], profile: null, season: "", query: "" },
   eventSearch: { query: "", results: [], status: "" },
-  auto: { on: false, minutes: 2, timer: null },
+  auto: { on: false, minutes: 2, timer: null, initialized: false },
 };
 
 const PAGES = [
@@ -656,6 +656,7 @@ RENDER.overview = async () => {
 RENDER.competition = async (params) => {
   if (params.match) S.comp.match = params.match;
   const d = await view("competition", { match: S.comp.match });
+  if (d.head.loaded && !S.auto.initialized) { S.auto.initialized = true; setAuto(true); }
   const my = d.head.my_team ? String(d.head.my_team) : "";
   const list = h("div", { class: "matchlist" });
   const sel = d.detail ? d.detail.label : null;
@@ -686,7 +687,11 @@ RENDER.competition = async (params) => {
     hero("COMPETITION DAY", "Everything you need between matches.", d.head.loaded ? d.line : "Load an event to populate your match desk."),
     metricsRow(d.metrics),
     h("div", { class: "row", style: { marginBottom: "14px" } },
-      btn("Refresh results", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
+      btn("Refresh meet data", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
+      check("Auto-refresh", S.auto.on, (v) => setAuto(v)),
+      h("span", { class: "muted small", text: "every" }),
+      h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "64px" }, onchange: (e) => { S.auto.minutes = Math.max(1, Number(e.target.value) || 2); if (S.auto.on) setAuto(true); } }),
+      h("span", { class: "muted small", text: "min" }),
       btn("Open live scouting", () => go("live")), btn("Alliance selection", () => go("alliances")),
       btn("Team research", () => go("research")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
     h("div", { class: "grid2" }, card("Match desk", list), card("Selected match", ...detail)),
