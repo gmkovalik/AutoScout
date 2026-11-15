@@ -940,7 +940,7 @@ RENDER.research = async () => {
     h("div", { class: "grid2" },
       card("Season event history", dataTable(P.events, { id: "r-events", short: true, empty: "No events this season." })),
       h("div", null, card("Awards", dataTable(P.awards, { id: "r-awards", short: true, empty: "No awards listed." })),
-        card("Match log", dataTable(P.matches, { id: "r-matches", short: true, empty: "No match records." })))),
+        card("Match log", dataTable(P.matches, { id: "r-matches", short: true, empty: "No match records.", onRow: (_iid, vals) => infoDialog("Team match record", vals.join("\\n")) })))),
     h("p", { class: "note pre", text: P.footer }),
   ] : [];
   return [
@@ -959,6 +959,7 @@ async function openMatchDetails(label) {
     const d = await view("match_detail", { match: String(label) });
     const live = await view("live", { match: String(label) });
     S.live.match = String(label);
+    S.live.team = (live.match_teams && live.match_teams[0] && live.match_teams[0][0]) ? String(live.match_teams[0][0]) : "";
     const teams = (d.teams || []).map((side) => h("section", { class: "match-team-side " + side.color },
       h("h3", { text: side.label }),
       ...(side.teams || []).map((t) => h("div", { class: "match-team" },
@@ -973,13 +974,18 @@ async function openMatchDetails(label) {
       }));
     };
     drawNotes(live);
+    const matchData = await view("matches");
+    const matchColumns = matchData.table.columns.map((c) => c.key);
+    const matchRow = matchData.table.rows.find((row) => String(row[0]) === String(label));
     modal((close) => [
       h("button", { class: "btn small close", onclick: close, "aria-label": "Close" }, "✕"),
       h("h2", { text: d.title || String(label) }),
       h("div", { class: "match-team-grid" }, ...teams),
       card("Match statistics", h("div", { class: "detail pre", text: d.text || "No additional match statistics are available yet." })),
       noteBox,
-      h("div", { class: "foot" }, btn("Open Live Scouting", () => { close(); go("live", { match: String(label) }); }, "primary")),
+      h("div", { class: "foot" },
+        matchRow ? btn("Edit score", () => { close(); resultDialog(String(label), matchRow[1], matchColumns); }, "small") : null,
+        btn("Open Live Scouting", () => { close(); go("live", { match: String(label) }); }, "primary")),
     ], { wide: true });
   } catch (e) { toast("Could not load match details: " + e.message, true); }
 }
