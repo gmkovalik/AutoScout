@@ -318,3 +318,6 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .alliance-red-winner { background:rgba(190,35,50,.12) !important; color:#a51f2d; font-weight:800; }
 .alliance-blue-winner { background:rgba(35,95,190,.12) !important; color:#1e56a8; font-weight:800; }
 @media(max-width:600px){.match-team-grid{grid-template-columns:minmax(0,1fr)}}
+
+.matchrow .side.r.won { color:#a51f2d; font-weight:900; background:rgba(190,35,50,.12); border-radius:5px; padding:2px 5px; }
+.matchrow .side.b.won { color:#1e56a8; font-weight:900; background:rgba(35,95,190,.12); border-radius:5px; padding:2px 5px; }
