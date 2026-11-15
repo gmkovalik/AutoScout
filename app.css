@@ -240,6 +240,7 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .dialog h2 { font-size: 18px; margin-bottom: 10px; }
 .dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .dialog .close { float: right; margin: -6px -6px 0 0; }
+.dialog .close { min-width: 38px; min-height: 38px; font-size: 17px; padding: 7px 10px; }
 .dialog pre { white-space: pre-wrap; font: 13.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--row-alt); padding: 12px; border-radius: 8px; margin: 0; overflow-wrap: anywhere; }
 .switchlist { display: flex; flex-direction: column; margin-top: 8px; max-height: 50vh; overflow: auto; }
 .switchlist button { text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 7px; cursor: pointer; }
@@ -302,3 +303,13 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
   body { background: #fff; }
   .tablewrap { max-height: none; overflow: visible; }
 }
+
+/* Match detail layout and clear alliance identification. */
+.match-team-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.match-team-side { border: 1px solid var(--border); border-radius: 10px; padding: 12px; min-width: 0; }
+.match-team-side.red { background: rgba(190, 35, 50, .06); border-color: rgba(190, 35, 50, .28); }
+.match-team-side.blue { background: rgba(35, 95, 190, .06); border-color: rgba(35, 95, 190, .28); }
+.match-team-side h3 { margin: 0 0 8px; font-size: 14px; }
+.match-team { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+.match-team .muted { grid-column: 2; }
+@media (max-width: 600px) { .match-team-grid { grid-template-columns: minmax(0, 1fr); } }
