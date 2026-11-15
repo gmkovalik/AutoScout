@@ -6105,6 +6105,11 @@ class Session:
         info = client.event(self.season, self.event_code, max_age=0)
         rows = client.event_teams(self.season, self.event_code, max_age=0)
         payload = client.event_matches(self.season, self.event_code, max_age=0)
+        if not rows and self.team_numbers:
+            # A transient empty team response must not erase the last good event statistics.
+            self.api_matches = matches_from_json(payload)
+            self.compute()
+            return sum(1 for m in self.matches if m.played)
         current_code = self.event_code.strip().upper()
         fresh_numbers = []
         for row in rows:
