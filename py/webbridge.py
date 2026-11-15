@@ -404,12 +404,25 @@ def view_competition(o):
     detail = None
     if label:
         p._show_match(label)
-        detail = {"label": label, "title": p.detail_title.get(), "text": p.detail_text.text}
+        match = next((m for m in s.matches if m.label == label), None)
+        detail = {"label": label, "title": p.detail_title.get(), "text": p.detail_text.text,
+                  "red": list(match.red) if match else [], "blue": list(match.blue) if match else [],
+                  "team_names": {str(n): s.team_names.get(n, "Team name unavailable")
+                                 for n in (match.teams if match else [])}}
+    rows = []
+    predictions = {x.match.label: x for x in s.predictions}
+    for match in s.matches:
+        pred = predictions.get(match.label)
+        rows.append([match.label, " · ".join(str(n) for n in match.red),
+                     " · ".join(str(n) for n in match.blue),
+                     "" if pred is None or pred.correct is None else bool(pred.correct),
+                     match.winner or "", "Played" if match.played else "Upcoming"])
     return {"line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": _simple_table(["MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "WIN CHANCE", "STATUS"],
-                                     p.match_tree.inserted),
+            "matches": {"columns": [{"key": k, "label": k} for k in
+                                    ("MATCH", "RED ALLIANCE", "BLUE ALLIANCE", "CORRECT", "WINNER", "STATUS")],
+                        "rows": rows},
             "upcoming": upcoming, "detail": detail}
 
 
