@@ -396,17 +396,62 @@ def view_overview(o):
 
 
 def view_competition(o):
-    p = probe(A.CompetitionDayTab, metric_vars=recs(5))
-    p.refresh()
     s = APP.session
-    upcoming = next((m.label for m in s.matches if not m.played), None)
-    matches_table = view_matches({})["table"]
-    # Keep the full Matches-tab statistics in Schedule Data, not a reduced matchup list.
-    # The browser adds an Open action to each row for the existing detailed match dialog.
-    return {"line": p.event_line.cfg.get("text", ""),
-            "metrics": [{"label": lab, "value": v.get()} for lab, v in
-                        zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": matches_table, "upcoming": upcoming}
+    matches = list(s.matches or [])
+    predictions = {p.match.label: p for p in (s.predictions or [])}
+    played = sum(bool(m.played) for m in matches)
+    upcoming = next((m.label for m in matches if not m.played), None)
+    metrics = [
+        {"label": "EVENT TEAMS", "value": str(len(s.teams))},
+        {"label": "MATCHES", "value": str(len(matches))},
+        {"label": "PLAYED", "value": f"{played}/{len(matches)}"},
+        {"label": "UP NEXT", "value": upcoming or ("Complete" if matches else "-")},
+        {"label": "MY TEAM", "value": str(s.my_team or "Not set")},
+    ]
+    columns = [
+        ("match", "Match", 90, "w"), ("r1", "Red 1", 85, "w"),
+        ("r2", "Red 2", 85, "w"), ("b1", "Blue 1", 85, "w"),
+        ("b2", "Blue 2", 85, "w"), ("red_pts", "Red pts", 85, "e"),
+        ("blue_pts", "Blue pts", 85, "e"), ("red_cow", "Red win chance", 115, "e"),
+        ("blue_cow", "Blue win chance", 115, "e"), ("red_strength", "Red strength", 105, "e"),
+        ("blue_strength", "Blue strength", 105, "e"), ("predicted", "Predicted", 95, "w"),
+        ("actual", "Actual", 85, "w"), ("red_score", "Red score", 85, "e"),
+        ("blue_score", "Blue score", 85, "e"), ("correct", "Correct", 75, "center"),
+        ("surrogates", "Surrogates", 110, "w")
+    ]
+    rows = []
+    for match in matches:
+        prediction = predictions.get(match.label)
+        red = list(match.red) + ["", ""]
+        blue = list(match.blue) + ["", ""]
+        correct = "" if prediction is None or prediction.correct is None else ("✔" if prediction.correct else "✘")
+        vals = [
+            match.label, red[0], red[1], blue[0], blue[1],
+            f"{prediction.red_pts:.1f}" if prediction else "",
+            f"{prediction.blue_pts:.1f}" if prediction else "",
+            f"{prediction.red_cow:.1%}" if prediction else "",
+            f"{prediction.blue_cow:.1%}" if prediction else "",
+            f"{prediction.red_strength:.1f}%" if prediction else "",
+            f"{prediction.blue_strength:.1f}%" if prediction else "",
+            prediction.winner if prediction else "",
+            match.winner or "",
+            f"{match.red_score:.0f}" if match.red_score is not None else "",
+            f"{match.blue_score:.0f}" if match.blue_score is not None else "",
+            correct, " ".join(str(n) for n in match.surrogates),
+        ]
+        tags = []
+        if prediction and prediction.correct is not None:
+            tags.append("ok" if prediction.correct else "bad")
+        else:
+            tags.append("pending")
+        if s.my_team and s.my_team in match.teams:
+            tags.append("mine")
+        rows.append([match.label, vals, tags])
+    table = {"columns": [{"key": key, "label": label, "align": align}
+                         for key, label, _width, align in columns],
+             "rows": rows}
+    return {"line": f"{s.event_name or 'No event loaded'}  •  Season {s.season}  •  {s.event_code or 'No event code'}",
+            "metrics": metrics, "matches": table, "upcoming": upcoming}
 
 
 def view_setup(o):
