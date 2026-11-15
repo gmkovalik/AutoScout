@@ -476,7 +476,7 @@ def view_match_detail(o):
         out = []
         for number in numbers:
             team = s.teams.get(number)
-            out.append({"number": number, "name": getattr(team, "name", "") if team else "",
+            out.append({"number": number, "name": (getattr(team, "name", "") or s.team_names.get(number, "")) if team else s.team_names.get(number, ""),
                         "stats": (f"CAP {team.cap:.1f} · OPR {team.opr:.1f} · EPA {team.epa:.1f}"
                                   if team and getattr(team, "epa", None) is not None else
                                   f"CAP {team.cap:.1f} · OPR {team.opr:.1f}" if team else "")})
@@ -740,7 +740,7 @@ def act_refresh(a):
     client = APP.make_client()
     client.last_error = None
     try:
-        played = s.refresh_results(client)
+        played = s.refresh_live_data(client)
     except A.ApiError as e:
         return {"ok": False, "message": e.user_message}
     _autosave()
