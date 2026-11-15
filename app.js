@@ -868,7 +868,7 @@ function setAuto(on) {
   if (on) S.auto.timer = setInterval(async () => {
     if (S.loading) return;
     const r = await runAction("refresh", {}, false);
-    if (r.ok && ["matches", "competition", "standings", "myteam", "analysis", "overview"].includes(S.page)) rerender();
+    if (r.ok) rerender();
   }, S.auto.minutes * 60000);
 }
 function resultDialog(label, vals, cols) {
