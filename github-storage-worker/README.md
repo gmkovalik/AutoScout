@@ -21,7 +21,7 @@ This is shared-workspace access control, not confidentiality. Do not put private
 
 ## Worker setup
 
-1. Create a separate **public** repository for team data, for example `gmkovalik/AutoScout-Data`. Do not use the application repository for scouting data.
+1. Create a separate **public** repository for team data, `gmkovalik/AutoScout-Data` (already created). Do not use the application repository for scouting data.
 2. Create a Cloudflare Worker from `index.js`.
 3. Set Worker variables:
    - `DATA_REPO`: the data repository in `owner/repo` format.
