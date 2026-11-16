@@ -519,3 +519,121 @@ main { flex: 1 0 auto; width: 100%; min-height: calc(100vh - 40px); }
 
 /* Keep the footer hidden until the AutoScout engine has loaded and the app is ready. */
 body:not(.app-ready) .site-footer { display: none; }
+
+
+/* Teams workspace: league participation, match-phase charts, and chronological notes. */
+.team-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.league-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 4px 0 12px;
+}
+.league-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e7cbd3;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #fbe9ee;
+  color: #5d081f;
+  font-size: 13px;
+  font-weight: 700;
+}
+.league-event-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.league-event-link {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  text-decoration: none;
+}
+.league-event-link:hover { background: var(--brand-tint); }
+.league-event-name { color: var(--brand); font-weight: 800; overflow-wrap: anywhere; }
+.phase-chart-controls { margin: 2px 0 10px; }
+.notes-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.notes-overview h2 { font-size: 18px; color: var(--brand); }
+.notes-overview p { margin: 4px 0 0; }
+.match-note-group {
+  min-width: 0;
+  margin-bottom: 12px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.match-note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.match-note-head h3 { color: var(--brand); font-size: 16px; margin-bottom: 3px; }
+.match-note-actions { display: flex; align-items: center; gap: 8px; }
+.note-status {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #eef1f6;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.note-status.played { background: #dff2d8; color: #27633b; }
+.match-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.match-note-entry {
+  min-width: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--brand-ink);
+  border-radius: 0 8px 8px 0;
+  background: #f7f8fb;
+}
+.match-note-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.match-note-meta .note-time { color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
+.match-note-meta .btn { margin-left: auto; }
+.match-note-text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.no-match-notes { margin: 10px 0 0; }
+@media(max-width:600px) {
+  .match-note-group { padding: 11px; }
+  .match-note-meta { align-items: flex-start; }
+  .match-note-meta .btn { margin-left: 0; }
+  .notes-overview { align-items: flex-start; }
+}
