@@ -631,9 +631,13 @@ async function loadEvent(args, { rerenderAfter = true } = {}) {
 
 async function runAction(name, args, okToast = true) {
   try {
+    const storage = window.AutoScoutTeamStorage;
+    if (storage && storage.signedIn() && (name === "note_delete" || name === "team_note_delete")) {
+      await deleteSharedNote(name, args || {});
+      return {ok:true, message:"Deleted shared note."};
+    }
     const r = await act(name, args);
-    if (r.ok && window.AutoScoutTeamStorage && window.AutoScoutTeamStorage.signedIn() &&
-        ["note_add", "note_delete", "team_note_add", "team_note_delete"].includes(name)) {
+    if (r.ok && storage && storage.signedIn() && ["note_add", "team_note_add"].includes(name)) {
       try { await syncTeamNotesToCloud(); }
       catch (e) { toast("Saved locally, but team sync failed: " + e.message, true); }
     }
@@ -847,18 +851,50 @@ async function syncTeamNotesToCloud() {
   const storage = window.AutoScoutTeamStorage;
   if (!storage || !storage.signedIn()) return;
   const d = await view("notes");
-  const matchNotes = {};
+  const [remoteMatches, remoteTeams] = await Promise.all([
+    storage.getFile("match-notes.json").catch(() => ({data:{matches:{}},etag:null})),
+    storage.getFile("team-notes.json").catch(() => ({data:{teams:{}},etag:null}))
+  ]);
+  const matchNotes = remoteMatches.data.matches || {};
   for (const match of d.matches || []) {
-    matchNotes[match.label] = (match.notes || []).map(({time, team, phase, text, photo}) => ({time, team, phase, text, photo}));
+    const combined = [...(matchNotes[match.label] || [])];
+    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text,n.photo])));
+    for (const note of match.notes || []) {
+      const item = {time:note.time,team:note.team,phase:note.phase,text:note.text,photo:note.photo};
+      const key = JSON.stringify([item.time,item.team,item.phase,item.text,item.photo]);
+      if (!known.has(key)) { combined.push(item); known.add(key); }
+    }
+    matchNotes[match.label] = combined.sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
   }
-  const teamNotes = {};
+  const teamNotes = remoteTeams.data.teams || {};
   for (const note of d.team_notes || []) {
-    (teamNotes[note.team] ||= []).push({time: note.time, text: note.text, photo: note.photo});
+    const rows = teamNotes[note.team] ||= [];
+    const key = JSON.stringify([note.time,note.text,note.photo]);
+    if (!rows.some(n => JSON.stringify([n.time,n.text,n.photo]) === key))
+      rows.push({time:note.time,text:note.text,photo:note.photo});
   }
-  await storage.putFile("match-notes.json", {schema:1, matches:matchNotes});
-  await storage.putFile("team-notes.json", {schema:1, teams:teamNotes});
+  await storage.putFile("match-notes.json", {schema:1,matches:matchNotes}, remoteMatches.etag);
+  await storage.putFile("team-notes.json", {schema:1,teams:teamNotes}, remoteTeams.etag);
 }
 
+async function deleteSharedNote(kind, args) {
+  const storage = window.AutoScoutTeamStorage;
+  if (kind === "note_delete") {
+    const file = await storage.getFile("match-notes.json");
+    const rows = file.data.matches && file.data.matches[args.match] || [];
+    const index = Number(args.index);
+    if (index >= 0 && index < rows.length) rows.splice(index,1);
+    await storage.putFile("match-notes.json", file.data, file.etag);
+  } else {
+    const file = await storage.getFile("team-notes.json");
+    const team = String(args.team || "");
+    const rows = file.data.teams && file.data.teams[team] || [];
+    const index = Number(args.index);
+    if (index >= 0 && index < rows.length) rows.splice(index,1);
+    if (!rows.length) delete file.data.teams[team];
+    await storage.putFile("team-notes.json", file.data, file.etag);
+  }
+}
 async function loadTeamNotesFromCloud(d) {
   const storage = window.AutoScoutTeamStorage;
   if (!storage || !storage.signedIn()) return d;
