@@ -492,6 +492,74 @@ def _team_league_info(team: int, season: int) -> dict:
             "source": "FTC Events event pages", "official_url": "https://ftc-events.firstinspires.org/"}
 
 
+def _team_phase_chart(team: int, season: int, event_code: str, scope: str) -> dict:
+    """Chart actual alliance phase totals for the team's matches when FTCScout supplies them."""
+    try:
+        client = APP.make_client(offline=False)
+        payload = client.team_matches(int(team), int(season))
+    except Exception as exc:
+        return {"title": "Auto / Teleop / Endgame by match",
+                "series": [], "note": f"Match phase data could not be loaded: {exc}"}
+    if not isinstance(payload, list):
+        payload = []
+    rows = []
+    current = str(event_code or "").strip().casefold()
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        match = item.get("match") if isinstance(item.get("match"), dict) else item
+        event = item.get("event") if isinstance(item.get("event"), dict) else {}
+        code = str(item.get("eventCode") or match.get("eventCode") or event.get("code") or "").strip()
+        if scope == "event" and code.casefold() != current:
+            continue
+        alliance = str(item.get("alliance") or item.get("color") or "").strip().casefold()
+        if alliance not in ("red", "blue"):
+            for participant in match.get("teams", []) if isinstance(match.get("teams"), list) else []:
+                if isinstance(participant, dict) and int(participant.get("teamNumber") or 0) == int(team):
+                    alliance = str(participant.get("alliance") or "").strip().casefold()
+                    break
+        if alliance not in ("red", "blue"):
+            continue
+        scores = match.get("scores") or item.get("scores") or {}
+        side = scores.get(alliance) if isinstance(scores, dict) else None
+        if not isinstance(side, dict):
+            side = scores if isinstance(scores, dict) else {}
+        def phase(*keys):
+            for key in keys:
+                value = side.get(key)
+                if isinstance(value, (int, float)):
+                    return float(value)
+            return None
+        auto = phase("autoPoints", "autonomousPoints")
+        teleop = phase("teleopPoints", "dcPoints", "driverControlledPoints")
+        endgame = phase("endgamePoints")
+        if all(value is None for value in (auto, teleop, endgame)):
+            continue
+        label = str(match.get("label") or match.get("description") or item.get("matchId") or item.get("matchNumber") or "Match")
+        try:
+            order = float(match.get("matchNumber") or item.get("matchNumber") or len(rows) + 1)
+        except (TypeError, ValueError):
+            order = float(len(rows) + 1)
+        rows.append((code, label, order, auto, teleop, endgame))
+    rows.sort(key=lambda row: (row[0], row[2], row[1]))
+    if not rows:
+        return {"title": "Auto / Teleop / Endgame by match", "series": [],
+                "note": "FTCScout did not return phase-by-phase scores for these matches. Overall match scores are not substituted for phase data."}
+    ticks = []
+    for i, row in enumerate(rows, 1):
+        ticks.append([float(i), (row[0] + " " if scope == "season" else "") + row[1]])
+    series = []
+    for name, col, color in (("Auto", 3, "#2f6fdb"), ("Teleop", 4, "#b92e4b"), ("Endgame", 5, "#5d081f")):
+        points = [{"x": float(i + 1), "y": row[col], "key": row[1],
+                   "text": f"{row[0]} {row[1]}\\n{name}: {row[col]:.1f}"}
+                  for i, row in enumerate(rows) if row[col] is not None]
+        series.append({"name": name, "color": color, "kind": "line", "points": points})
+    return {"title": f"{'Season' if scope == 'season' else 'Event'} match phase scores for team {team}",
+            "x_label": "Matches in played order", "y_label": "Alliance points",
+            "series": series, "x_ticks": ticks,
+            "note": "Alliance phase totals for matches this team played, not individual robot contributions."}
+
+
 def view_teams(o):
     p = probe(A.TeamsTab, _editing=0, _panel_added=False)
     p.refresh()
@@ -503,6 +571,9 @@ def view_teams(o):
                          "delta": p.delta_var.get(), "focus": p.focus_var.get(), "note": p.note_var.get()}
         out["panel"] = _team_panel(team, o)
         out["league_info"] = _team_league_info(team, APP.session.season)
+        out["phase_charts"] = {
+            "event": _team_phase_chart(team, APP.session.season, APP.session.event_code, "event"),
+            "season": _team_phase_chart(team, APP.session.season, APP.session.event_code, "season")}
     return out
 
 
