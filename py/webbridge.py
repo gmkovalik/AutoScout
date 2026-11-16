@@ -465,10 +465,15 @@ def _team_league_info(team: int, season: int) -> dict:
         if not isinstance(item, dict):
             continue
         league_obj = nested(item, "league")
-        code = str(item.get("code") or item.get("leagueCode") or
-                   league_obj.get("code") or league_obj.get("leagueCode") or "").strip()
-        region = str(item.get("regionCode") or item.get("region") or
-                     league_obj.get("regionCode") or "").strip()
+        code = str(item.get("leagueCode") or item.get("code") or
+                   league_obj.get("leagueCode") or league_obj.get("code") or "").strip()
+        region_obj = nested(item, "region") or nested(league_obj, "region")
+        region_value = item.get("regionCode") or league_obj.get("regionCode") or ""
+        if not region_value and isinstance(item.get("region"), str):
+            region_value = item.get("region")
+        if not region_value:
+            region_value = region_obj.get("code") or region_obj.get("regionCode") or ""
+        region = str(region_value).strip()
         name = str(item.get("name") or item.get("leagueName") or
                    league_obj.get("name") or league_obj.get("leagueName") or code or "League").strip()
         entry = {"name": name, "code": code, "region": region, "rank": None,
