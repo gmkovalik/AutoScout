@@ -515,4 +515,7 @@ main { flex: 1 0 auto; width: 100%; min-height: calc(100vh - 40px); }
 
 
 /* Hide the site footer while the initial AutoScout engine-loading splash is present. */
-body:has(#splash) .site-footer { display: none; }
+
+
+/* Keep the footer hidden until the AutoScout engine has loaded and the app is ready. */
+body:not(.app-ready) .site-footer { display: none; }
