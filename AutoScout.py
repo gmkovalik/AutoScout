@@ -6061,6 +6061,7 @@ class Session:
     warnings: list[str] = field(default_factory=list)
     live_stream_url: str = ""
     live_notes: dict[str, list[dict]] = field(default_factory=dict)
+    team_notes: dict[str, list[dict]] = field(default_factory=dict)
     loaded_at: str = ""
     path: str = ""
     # computed (not saved)
@@ -6256,6 +6257,7 @@ class Session:
             "epa_events": [e.to_dict() for e in self.epa_events],
             "warnings": self.warnings, "loaded_at": self.loaded_at,
             "live_stream_url": self.live_stream_url, "live_notes": self.live_notes,
+            "team_notes": self.team_notes,
         }
 
     @classmethod
@@ -6279,6 +6281,8 @@ class Session:
         s.live_stream_url = str(d.get("live_stream_url", "") or "")
         s.live_notes = {str(k): [dict(n) for n in v if isinstance(n, dict)]
                         for k, v in (d.get("live_notes", {}) or {}).items() if isinstance(v, list)}
+        s.team_notes = {str(k): [dict(n) for n in v if isinstance(n, dict)]
+                        for k, v in (d.get("team_notes", {}) or {}).items() if isinstance(v, list)}
         s.loaded_at = d.get("loaded_at", "")
         s.compute()
         return s
