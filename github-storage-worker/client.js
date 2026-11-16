@@ -19,7 +19,7 @@
 
   window.AutoScoutTeamStorage = {
     configured: () => !!base,
-    configure(url) { base = String(url || "").trim().replace(/\\/$/, ""); if (base) localStorage.setItem("autoscout_team_storage_url", base); else localStorage.removeItem("autoscout_team_storage_url"); return !!base; },
+    configure(url) { base = String(url || "").trim().replace(/\/$/, ""); if (base) localStorage.setItem("autoscout_team_storage_url", base); else localStorage.removeItem("autoscout_team_storage_url"); return !!base; },
     signedIn: () => !!(token && team),
     currentTeam: () => team,
     async register(teamNumber, password, registrationKey) {
