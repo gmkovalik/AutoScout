@@ -1568,7 +1568,8 @@ function teamStorageSettingsCard() {
         .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
       const sessionData = JSON.parse(exported.text);
       sessionData.live_notes = {};
-      sessionData.team_notes = {};\n      await storage.putFile("sessions/" + slug + ".json", sessionData);
+      sessionData.team_notes = {};
+      await storage.putFile("sessions/" + slug + ".json", sessionData);
       toast("Session saved to Team " + storage.currentTeam() + ".");
     } catch(e) { toast(e.message,true); }
   }, "small");
