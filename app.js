@@ -865,12 +865,12 @@ async function syncTeamNotesToCloud() {
   };
   for (const match of d.matches || []) {
     const combined = [...(matchNotes[match.label] || [])];
-    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text,n.photoRef||n.photo])));
+    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text])));
     for (let index=0; index<(match.notes||[]).length; index++) {
       const note = match.notes[index];
       const photoRef = note.photo ? await savePhoto(note.photo, "m_"+match.label+"_"+note.time+"_"+index) : (note.photoRef || "");
       const item = {time:note.time,team:note.team,phase:note.phase,text:note.text,photoRef};
-      const key = JSON.stringify([item.time,item.team,item.phase,item.text,item.photoRef]);
+      const key = JSON.stringify([item.time,item.team,item.phase,item.text]);
       if (!known.has(key)) { combined.push(item); known.add(key); }
     }
     matchNotes[match.label] = combined.sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
@@ -879,8 +879,8 @@ async function syncTeamNotesToCloud() {
   for (const note of d.team_notes || []) {
     const rows = teamNotes[note.team] ||= [];
     const photoRef = note.photo ? await savePhoto(note.photo, "t_"+note.team+"_"+note.time) : (note.photoRef || "");
-    const key = JSON.stringify([note.time,note.text,photoRef]);
-    if (!rows.some(n => JSON.stringify([n.time,n.text,n.photoRef||n.photo]) === key))
+    const key = JSON.stringify([note.time,note.text]);
+    if (!rows.some(n => JSON.stringify([n.time,n.text]) === key))
       rows.push({time:note.time,text:note.text,photoRef});
   }
   await storage.putFile("match-notes.json", {schema:1,matches:matchNotes}, remoteMatches.etag);
@@ -1566,7 +1566,7 @@ function teamStorageSettingsCard() {
       if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
       const slug = (String(S.head && S.head.season || "season") + "_" + String(S.head && S.head.code || "session"))
         .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
-      await storage.putFile("sessions/" + slug + ".json", JSON.parse(exported.text));
+      const sessionData = JSON.parse(exported.text);\n      sessionData.live_notes = {};\n      sessionData.team_notes = {};\n      await storage.putFile("sessions/" + slug + ".json", sessionData);
       toast("Session saved to Team " + storage.currentTeam() + ".");
     } catch(e) { toast(e.message,true); }
   }, "small");
