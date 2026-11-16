@@ -689,3 +689,50 @@ body:not(.app-ready) .site-footer { display: none; }
   .league-ranking-table { font-size: 12px; }
   .league-ranking-table th, .league-ranking-table td { padding: 6px 7px; }
 }
+
+
+/* Separate Match Notes and Team Notes workspaces, with independent photo attachments. */
+.notes-main-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.notes-main-tabs .btn {
+  min-height: 48px;
+  min-width: 150px;
+  padding: 11px 22px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.team-note-actions { align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.team-note-list { display: grid; gap: 10px; }
+.team-note-entry {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-ink);
+  border-radius: 9px;
+  background: #fff;
+}
+.team-note-entry .match-note-meta { margin-bottom: 7px; }
+.note-photo {
+  display: block;
+  max-width: min(100%, 520px);
+  max-height: 340px;
+  width: auto;
+  height: auto;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  object-fit: contain;
+  background: #f7f8fb;
+}
+.match-note-entry .note-photo { max-width: min(100%, 440px); max-height: 280px; }
+.notes .notecard .note-photo { margin-top: 8px; }
+@media(max-width:600px) {
+  .notes-main-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .notes-main-tabs .btn { min-width: 0; width: 100%; padding: 10px 8px; }
+  .note-photo { max-height: 260px; }
+}
