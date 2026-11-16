@@ -5,7 +5,7 @@
   const config = window.AUTOSCOUT_TEAM_STORAGE || {};
   let token = null;
   let team = null;
-  const base = String(config.url || "").replace(/\/$/, "");
+  let base = String(config.url || localStorage.getItem("autoscout_team_storage_url") || "").replace(/\/$/, "");
 
   async function request(path, options = {}) {
     if (!base) throw new Error("Team cloud storage has not been configured.");
@@ -19,6 +19,8 @@
 
   window.AutoScoutTeamStorage = {
     configured: () => !!base,
+    configure(url) { base = String(url || "").trim().replace(/\\/$/, ""); if (base) localStorage.setItem("autoscout_team_storage_url", base); else localStorage.removeItem("autoscout_team_storage_url"); return !!base; },
+    signedIn: () => !!(token && team),
     currentTeam: () => team,
     async register(teamNumber, password, registrationKey) {
       const result = await request("/api/register", {
