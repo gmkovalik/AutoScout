@@ -822,10 +822,19 @@ async function saveSession() {
 
 // ---- Teams (+ the team sheet) ---------------------------------------------
 RENDER.teams = async (params) => {
+  const tab = params.tab === "notes" ? "notes" : "teams";
   const team = params.team ? Number(params.team) : 0;
+  const tabs = h("div", { class: "team-subtabs" },
+    btn("Teams", () => go("teams"), tab === "teams" ? "primary" : ""),
+    btn("Notes", () => go("teams", { tab: "notes" }), tab === "notes" ? "primary" : ""));
+  if (tab === "notes") {
+    const d = await view("notes");
+    return [tabs, renderNotesTimeline(d)];
+  }
   const d = await view("teams", { ...S.panel, team });
   const nodes = [
-    h("p", { class: "muted", text: "Tap a team to chart its statistics and edit its inputs." }),
+    tabs,
+    h("p", { class: "muted", text: "Tap a team to chart its statistics, review league participation and edit its inputs." }),
     dataTable(d.table, { id: "teams", sticky: 2, flash: team || null, onRow: (iid) => go("teams", { team: iid }),
       empty: "No teams loaded. Load a meet on the Setup tab first." }),
   ];
@@ -833,6 +842,69 @@ RENDER.teams = async (params) => {
   else if (team) afterRender.push(() => toast(`Team ${team} is not at this event.`, true));
   return nodes;
 };
+
+function renderNotesTimeline(d) {
+  if (!d.loaded) return card("Match notes", h("p", { class: "muted", text: "Load a meet on Setup to see its schedule and scouting notes here." }));
+  const groups = d.matches.map((m) => {
+    const status = m.played ? "Played" : "Scheduled";
+    const notes = (m.notes || []).slice().sort((a, b) => String(a.time || "").localeCompare(String(b.time || "")));
+    return h("section", { class: "match-note-group" },
+      h("div", { class: "match-note-head" },
+        h("div", null, h("h3", { text: m.label }), h("span", { class: "muted small", text: `Red: ${m.red.join(" · ")}  |  Blue: ${m.blue.join(" · ")}` })),
+        h("div", { class: "match-note-actions" },
+          h("span", { class: "note-status" + (m.played ? " played" : ""), text: status }),
+          btn("Add note", () => openMatchDetails(m.label), "small"))),
+      m.score ? h("p", { class: "muted small", text: `Score: ${m.score}` }) : null,
+      notes.length ? h("div", { class: "match-note-list" }, notes.map((n) =>
+        h("article", { class: "match-note-entry" },
+          h("div", { class: "match-note-meta" },
+            h("span", { class: "note-time", text: n.time || "Time not recorded" }),
+            h("span", { text: n.team || "General" }),
+            h("span", { text: n.phase || "Overall" }),
+            btn("Delete", async () => { await runAction("note_delete", { match: m.label, index: n.index }, false); rerender(); }, "small danger")),
+          h("p", { class: "match-note-text", text: n.text || "" })))) :
+        h("p", { class: "muted small no-match-notes", text: "No notes recorded for this match yet." }));
+  });
+  return [
+    h("div", { class: "notes-overview" },
+      h("div", null, h("h2", { text: d.event || "Event schedule" }), h("p", { class: "muted small", text: `${d.matches.length} scheduled matches · ${d.note_count} scouting notes · listed in match order` })),
+      btn("Open Schedule Data", () => go("competition"), "small")),
+    ...groups,
+  ];
+}
+
+function leagueInfoCard(info) {
+  if (!info) return card("League & event participation", h("p", { class: "muted", text: "League information is not available." }));
+  const leagues = info.leagues || [];
+  const events = info.events || [];
+  return card("League & event participation",
+    leagues.length ? h("div", { class: "league-chip-list" }, leagues.map((league) =>
+      h("span", { class: "league-chip", text: [league.name, league.region].filter(Boolean).join(" · ") }))) :
+      h("p", { class: "muted small", text: "No league membership was returned for this season." }),
+    events.length ? h("div", { class: "league-event-list" }, events.map((event) =>
+      h("a", { class: "league-event-link", href: event.url, target: "_blank", rel: "noopener" },
+        h("span", { class: "league-event-name", text: event.name }),
+        h("span", { class: "muted small", text: [event.date, event.league, event.division ? `Division ${event.division}` : "", event.code].filter(Boolean).join(" · ") })))) :
+      h("p", { class: "muted small", text: "No event participations were returned for this season." }),
+    h("p", { class: "note", text: "Event links open the official FIRST Tech Challenge Events pages." }));
+}
+
+function teamPhaseChartCard(charts) {
+  const data = charts || {};
+  let scope = "event";
+  const body = h("div");
+  const draw = () => {
+    body.textContent = "";
+    const c = data[scope];
+    body.append(chartView(c, { height: 320, name: `team_phases_${scope}` }));
+    if (c && c.note) body.append(h("p", { class: "note", text: c.note }));
+  };
+  const controls = h("div", { class: "row phase-chart-controls" },
+    btn("This event", () => { scope = "event"; controls.querySelectorAll("button").forEach((b, i) => b.classList.toggle("primary", i === 0)); draw(); }, "primary small"),
+    btn("This season", () => { scope = "season"; controls.querySelectorAll("button").forEach((b, i) => b.classList.toggle("primary", i === 1)); draw(); }, "small"));
+  draw();
+  return card("Auto / Teleop / Endgame by match", controls, body);
+}
 
 function openTeamSheet(d) {
   const e = d.editor;
@@ -861,7 +933,9 @@ function openTeamSheet(d) {
       h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (Technical Issues + Team Focus)" }),
         h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Note", note, "wide")),
         h("div", { class: "row" }, btn("Apply", apply, "primary"))),
+      leagueInfoCard(d.league_info),
       panelBox,
+      teamPhaseChartCard(d.phase_charts),
     ];
   }, { wide: true, onClose: () => { if (parseHash().page === "teams" && parseHash().params.team) { history.replaceState(null, "", "#/teams"); rerender(); } } });
   return back;
