@@ -672,6 +672,7 @@ def view_notes(o):
                   "team": str(note.get("team") or "General"),
                   "phase": str(note.get("phase") or "Overall"),
                   "text": str(note.get("text") or ""),
+                  "photo": str(note.get("photo") or ""),
                   "index": index}
                  for index, note in raw_notes]
         score = ""
@@ -685,8 +686,17 @@ def view_notes(o):
             "score": score,
             "notes": notes
         })
+    team_notes = []
+    for team, rows in sorted(s.team_notes.items(), key=lambda pair: (int(pair[0]) if str(pair[0]).isdigit() else 0)):
+        for index, note in enumerate(rows):
+            team_notes.append({"team": str(team), "time": str(note.get("time") or ""),
+                               "text": str(note.get("text") or ""),
+                               "photo": str(note.get("photo") or ""), "index": index})
+    team_notes.sort(key=lambda note: (note["time"], note["team"]))
     return {"loaded": bool(s.matches), "event": s.event_name, "season": s.season,
-            "matches": matches, "note_count": sum(len(row["notes"]) for row in matches)}
+            "matches": matches, "note_count": sum(len(row["notes"]) for row in matches),
+            "team_options": [str(n) for n in sorted(set(s.team_numbers) | set(s.extra_teams))],
+            "team_notes": team_notes}
 
 
 def _team_panel(team: int, o: dict) -> dict:
@@ -1078,11 +1088,45 @@ def act_note_add(a):
     if team == "- alliance / general -":
         team = "General"
     import datetime
-    s.live_notes.setdefault(label, []).append({"time": datetime.datetime.now().strftime("%H:%M:%S"),
+    photo = str(a.get("photo") or "")
+    if photo and (not photo.startswith("data:image/") or len(photo) > 5_500_000):
+        return {"ok": False, "message": "Choose an image under 4 MB."}
+    s.live_notes.setdefault(label, []).append({"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                                "team": team, "phase": a.get("phase") or "Overall",
-                                               "text": text})
+                                               "text": text, "photo": photo})
     _autosave()
     return {"ok": True, "message": f"Added scouting note for {label}."}
+
+
+
+def act_team_note_add(a):
+    team = str(a.get("team") or "").strip()
+    text = (a.get("text") or "").strip()
+    photo = str(a.get("photo") or "")
+    if not team.isdigit():
+        return {"ok": False, "message": "Choose a team first."}
+    if not text and not photo:
+        return {"ok": False, "message": "Enter a note or attach a photo first."}
+    if photo and (not photo.startswith("data:image/") or len(photo) > 5_500_000):
+        return {"ok": False, "message": "Choose an image under 4 MB."}
+    import datetime
+    APP.session.team_notes.setdefault(team, []).append({
+        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "text": text, "photo": photo})
+    _autosave()
+    return {"ok": True, "message": f"Saved team note for {team}."}
+
+
+def act_team_note_delete(a):
+    team = str(a.get("team") or "")
+    notes = APP.session.team_notes.get(team, [])
+    i = int(a.get("index", -1))
+    if 0 <= i < len(notes):
+        notes.pop(i)
+        if not notes:
+            APP.session.team_notes.pop(team, None)
+        _autosave()
+    return {"ok": True}
 
 
 def act_note_delete(a):
@@ -1222,7 +1266,8 @@ def act_export(a):
 ACTIONS = {"load": act_load, "events_search": act_events_search, "schedule": act_schedule, "my_team": act_my_team, "refresh": act_refresh,
            "team_edit": act_team_edit, "overrides": act_overrides, "result": act_result,
            "settings": act_settings, "clear_cache": act_clear_cache, "offline": act_offline,
-           "note_add": act_note_add, "note_delete": act_note_delete, "stream": act_stream,
+           "note_add": act_note_add, "note_delete": act_note_delete,
+           "team_note_add": act_team_note_add, "team_note_delete": act_team_note_delete, "stream": act_stream,
            "youtube": act_youtube, "research_search": act_research_search,
            "research_load": act_research_load, "save": act_save, "open_saved": act_open_saved,
            "delete_saved": act_delete_saved, "import": act_import, "new": act_new, "export": act_export}
