@@ -495,3 +495,20 @@ main { flex: 1 0 auto; width: 100%; }
   font-weight: 500;
   letter-spacing: .2px;
 }
+
+
+/* ---------- site-wide footer ---------- */
+html, body { min-height: 100%; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1 0 auto; width: 100%; min-height: calc(100vh - 40px); }
+.site-footer {
+  flex: none;
+  width: 100%;
+  padding: 16px 20px calc(16px + var(--safe-bottom));
+  background: var(--brand);
+  color: #fff;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .2px;
+}
