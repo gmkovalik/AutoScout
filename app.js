@@ -1490,7 +1490,7 @@ function teamStorageSettingsCard() {
   }, "small");
   const saveCloudSession = btn("Save current session to team", async () => {
     try {
-      const exported = await act("action", "export", {kind:"session"});
+      const exported = await act("export", {kind:"session"});
       if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
       const slug = (String(S.head && S.head.season || "season") + "_" + String(S.head && S.head.code || "session"))
         .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
@@ -1498,25 +1498,20 @@ function teamStorageSettingsCard() {
       toast("Session saved to Team " + storage.currentTeam() + ".");
     } catch(e) { toast(e.message,true); }
   }, "small");
-  const openCloudSessions = btn("Refresh shared sessions", async () => {
+  const openCloudSessions = btn("Open shared session", async () => {
     try {
       const files = await storage.listFiles();
       const sessions = files.filter(f => f.path.includes("/sessions/") && f.name.endsWith(".json"));
-      const choices = sessions.map(f => btn("Open " + f.name.replace(/\\.json$/,""), async () => {
-        try {
-          const result = await storage.getFile("sessions/" + f.name);
-          const imported = await act("action", "import", {text:JSON.stringify(result.data)});
-          if (!imported.ok) throw new Error(imported.message || "Could not open shared session.");
-          toast("Opened shared session.");
-          await rerender();
-        } catch(e) { toast(e.message,true); }
-      }, "small"));
-      infoDialog("Shared team sessions", sessions.length ? "Select a session to open. " + sessions.map(f=>f.name).join(", ") : "No shared sessions have been saved yet.");
-      if (choices.length) {
-        const dialog = document.querySelector("#dialog");
-        const body = dialog && dialog.querySelector(".dialog-body");
-        if (body) body.append(...choices);
-      }
+      if (!sessions.length) { toast("No shared sessions have been saved yet."); return; }
+      const selected = prompt("Enter the shared session filename:\n" + sessions.map(f=>f.name).join("\n"), sessions[0].name);
+      if (!selected) return;
+      const file = sessions.find(f => f.name === selected.trim());
+      if (!file) { toast("That session filename was not found.", true); return; }
+      const result = await storage.getFile("sessions/" + file.name);
+      const imported = await act("import", {text:JSON.stringify(result.data)});
+      if (!imported.ok) throw new Error(imported.message || "Could not open shared session.");
+      toast("Opened shared session.");
+      await rerender();
     } catch(e) { toast(e.message,true); }
   }, "small");
   return card("Local and team storage",
