@@ -136,6 +136,7 @@ const S = {
   boot: null, head: null, page: "overview", params: {}, sort: {}, loading: false,
   comp: {}, panel: {}, all: {}, pairs: {}, chartsPage: "team", live: {}, research: { results: [], profile: null, season: "", query: "" },
   eventSearch: { query: "", results: [], status: "" },
+  notesTab: "matches", notesTeam: "",
   auto: { on: false, minutes: 2, timer: null, initialized: false },
 };
 
@@ -839,8 +840,55 @@ RENDER.teams = async (params) => {
 
 RENDER.notes = async () => {
   const d = await view("notes");
-  return renderNotesTimeline(d);
+  return renderNotesWorkspace(d);
 };
+
+function renderNotesWorkspace(d) {
+  const tabs = h("div", { class: "notes-main-tabs" },
+    btn("Match Notes", () => { S.notesTab = "matches"; rerender(); }, S.notesTab === "matches" ? "primary" : ""),
+    btn("Team Notes", () => { S.notesTab = "teams"; rerender(); }, S.notesTab === "teams" ? "primary" : ""));
+  return [tabs, ...(S.notesTab === "teams" ? renderTeamNotes(d) : renderNotesTimeline(d))];
+}
+
+function renderTeamNotes(d) {
+  const options = d.team_options || [];
+  if (!S.notesTeam && options.length) S.notesTeam = options[0];
+  const team = h("input", { type: "number", min: 1, step: 1, value: S.notesTeam || "", placeholder: "Enter team number",
+    onchange: (e) => { S.notesTeam = e.target.value.trim(); } });
+  const text = h("textarea", { rows: 4, placeholder: "Team observations, robot capabilities, strategy, reliability, driver practice, etc." });
+  let photo = "";
+  const photoStatus = h("span", { class: "muted small", text: "No photo attached" });
+  const add = async () => {
+    const r = await runAction("team_note_add", { team: S.notesTeam, text: text.value, photo }, false);
+    if (r.ok) { toast(r.message); rerender(); }
+    else toast(r.message || "Could not save team note.", true);
+  };
+  const visible = (d.team_notes || []).filter((n) => !S.notesTeam || n.team === String(S.notesTeam));
+  const list = visible.map((n) => h("article", { class: "team-note-entry" },
+    h("div", { class: "match-note-meta" },
+      h("strong", { text: "Team " + n.team }),
+      h("span", { class: "note-time", text: n.time || "Time not recorded" }),
+      btn("Delete", async () => {
+        const r = await runAction("team_note_delete", { team: n.team, index: n.index }, false);
+        if (r.ok) rerender(); else toast(r.message || "Could not delete note.", true);
+      }, "small danger")),
+    n.text ? h("p", { class: "match-note-text", text: n.text }) : null,
+    photoPreview(n.photo)));
+  return [
+    card("Team Notes",
+      h("p", { class: "muted small", text: "These notes belong to a team, not an individual match. They stay separate from Match Notes and are saved with this AutoScout session." }),
+      field("Team number", team),
+      field("Team observation", text),
+      h("div", { class: "row team-note-actions" },
+        btn("Add photo", async () => { photo = await imageAttachment(); photoStatus.textContent = photo ? "Photo attached" : "No photo attached"; }, "small"),
+        photoStatus,
+        btn("Save team note", add, "primary"))),
+    card(S.notesTeam ? `Notes for Team ${S.notesTeam}` : "All team notes",
+      h("div", { class: "row" }, field("Filter by team", select([["", "All teams"], ...options.map((n) => [n, n])], S.notesTeam, (v) => { S.notesTeam = v; rerender(); }))),
+      list.length ? h("div", { class: "team-note-list" }, list) :
+        h("p", { class: "muted small", text: "No team notes yet. Add an observation or attach a photo above." }))
+  ];
+}
 
 function renderNotesTimeline(d) {
   if (!d.loaded) return card("Match notes", h("p", { class: "muted", text: "Load a meet on Setup to see its schedule and scouting notes here." }));
@@ -861,7 +909,8 @@ function renderNotesTimeline(d) {
             h("span", { text: n.team || "General" }),
             h("span", { text: n.phase || "Overall" }),
             btn("Delete", async () => { await runAction("note_delete", { match: m.label, index: n.index }, false); rerender(); }, "small danger")),
-          h("p", { class: "match-note-text", text: n.text || "" })))) :
+          h("p", { class: "match-note-text", text: n.text || "" }),
+          photoPreview(n.photo)))) :
         h("p", { class: "muted small no-match-notes", text: "No notes recorded for this match yet." }));
   });
   return [
@@ -1317,6 +1366,30 @@ RENDER.live = async () => {
   ];
 };
 
+
+async function imageAttachment(label = "Photo") {
+  return new Promise((resolve) => {
+    const picker = h("input", { type: "file", accept: "image/*", style: { display: "none" } });
+    picker.addEventListener("change", () => {
+      const file = picker.files && picker.files[0];
+      if (!file) return resolve("");
+      if (!file.type.startsWith("image/")) { toast("Choose an image file.", true); return resolve(""); }
+      if (file.size > 4 * 1024 * 1024) { toast("Images must be 4 MB or smaller.", true); return resolve(""); }
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => { toast("Could not read that image.", true); resolve(""); };
+      reader.readAsDataURL(file);
+    }, { once: true });
+    document.body.append(picker);
+    picker.click();
+    picker.addEventListener("change", () => picker.remove(), { once: true });
+    picker.addEventListener("cancel", () => { picker.remove(); resolve(""); }, { once: true });
+  });
+}
+function photoPreview(data, className = "note-photo") {
+  return data ? h("img", { class: className, src: data, alt: "Attached scouting photo", loading: "lazy" }) : null;
+}
+
 function notesCard(d, update) {
   if (!d.matches.length) return card("Match notes", h("p", { class: "muted", text: "Load or paste a match schedule before adding match-specific notes." }));
   const counts = d.note_counts || {};
@@ -1328,19 +1401,23 @@ function notesCard(d, update) {
   const team = select(teamOpts, S.live.team || d.teams[0], (v) => { S.live.team = v; });
   const phase = select(d.phases, S.live.phase || "Overall", (v) => { S.live.phase = v; });
   const text = h("textarea", { rows: 4, placeholder: "What the robot/team did, outcome, reliability, issue, etc." });
+  let photo = "";
+  const photoStatus = h("span", { class: "muted small", text: "No photo attached" });
   const list = h("div", { class: "notes" });
   if (!d.notes.length) list.append(h("p", { class: "muted small", text: "No notes for this match yet." }));
   d.notes.forEach((n, i) => list.append(h("div", { class: "notecard" },
     h("span", { class: "meta", text: `${n.time || ""} · ${n.team || "General"} · ${n.phase || "Overall"}` }),
     h("button", { class: "btn small danger", type: "button", onclick: async () => { await runAction("note_delete", { match: d.match, index: i }, false); update({}); } }, "Delete"),
-    h("span", { class: "txt", text: n.text || "" }))));
+    h("span", { class: "txt", text: n.text || "" }), photoPreview(n.photo))));
   return card("Match notes",
     h("div", { class: "form" }, field("Match", match), field("Team", team), field("Phase", phase)),
     h("label", { class: "field", style: { marginTop: "10px" } }, h("span", { text: "Observation" }), text),
     h("div", { class: "row" },
+      btn("Add photo", async () => { photo = await imageAttachment(); photoStatus.textContent = photo ? "Photo attached" : "No photo attached"; }, "small"),
+      photoStatus,
       btn("Add note", async () => {
-        const r = await runAction("note_add", { match: d.match, team: team.value, phase: phase.value, text: text.value });
-        if (r.ok) update({});
+        const r = await runAction("note_add", { match: d.match, team: team.value, phase: phase.value, text: text.value, photo });
+        if (r.ok) { text.value = ""; photo = ""; photoStatus.textContent = "No photo attached"; update({}); }
       }, "primary"),
       h("span", { class: "spacer" }), btn("Save session", saveSession)),
     list);
