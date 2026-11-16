@@ -1453,7 +1453,27 @@ async function imageAttachment(label = "Photo") {
       if (!file.type.startsWith("image/")) { toast("Choose an image file.", true); return resolve(""); }
       if (file.size > 4 * 1024 * 1024) { toast("Images must be 4 MB or smaller.", true); return resolve(""); }
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          let quality = 0.68;
+          let data = canvas.toDataURL("image/jpeg", quality);
+          while (data.length > 650000 && quality > 0.35) {
+            quality -= 0.08;
+            data = canvas.toDataURL("image/jpeg", quality);
+          }
+          if (data.length > 680000) { toast("That photo is too large to sync. Try a smaller image.", true); resolve(""); }
+          else resolve(data);
+        };
+        img.onerror = () => { toast("Could not process that image.", true); resolve(""); };
+        img.src = String(reader.result || "");
+      };
       reader.onerror = () => { toast("Could not read that image.", true); resolve(""); };
       reader.readAsDataURL(file);
     }, { once: true });
