@@ -581,8 +581,8 @@ def view_notes(o):
     s = APP.session
     matches = []
     for match in s.matches:
-        notes = list(s.live_notes.get(match.label, []))
-        notes.sort(key=lambda note: str(note.get("time") or ""))
+        indexed_notes = list(enumerate(s.live_notes.get(match.label, [])))
+        indexed_notes.sort(key=lambda pair: (str(pair[1].get("time") or ""), pair[0]))
         matches.append({
             "label": match.label,
             "red": list(match.red),
@@ -594,7 +594,7 @@ def view_notes(o):
                        "phase": str(note.get("phase") or "Overall"),
                        "text": str(note.get("text") or ""),
                        "index": index}
-                      for index, note in enumerate(s.live_notes.get(match.label, []))]
+                      for index, note in indexed_notes]
         })
     return {"loaded": bool(s.matches), "event": s.event_name, "season": s.season,
             "matches": matches, "note_count": sum(len(row["notes"]) for row in matches)}
