@@ -631,7 +631,16 @@ async function loadEvent(args, { rerenderAfter = true } = {}) {
 
 async function runAction(name, args, okToast = true) {
   try {
+    const storage = window.AutoScoutTeamStorage;
+    if (storage && storage.signedIn() && (name === "note_delete" || name === "team_note_delete")) {
+      await deleteSharedNote(name, args || {});
+      return {ok:true, message:"Deleted shared note."};
+    }
     const r = await act(name, args);
+    if (r.ok && storage && storage.signedIn() && ["note_add", "team_note_add"].includes(name)) {
+      try { await syncTeamNotesToCloud(); }
+      catch (e) { toast("Saved locally, but team sync failed: " + e.message, true); }
+    }
     if (r.message && (okToast || !r.ok)) toast(r.message, !r.ok);
     return r;
   } catch (e) {
@@ -838,8 +847,91 @@ RENDER.teams = async (params) => {
   return nodes;
 };
 
+async function syncTeamNotesToCloud() {
+  const storage = window.AutoScoutTeamStorage;
+  if (!storage || !storage.signedIn()) return;
+  const d = await view("notes");
+  const [remoteMatches, remoteTeams] = await Promise.all([
+    storage.getFile("match-notes.json").catch(() => ({data:{matches:{}},etag:null})),
+    storage.getFile("team-notes.json").catch(() => ({data:{teams:{}},etag:null}))
+  ]);
+  const matchNotes = remoteMatches.data.matches || {};
+  const savePhoto = async (photo, id) => {
+    if (!photo || !String(photo).startsWith("data:image/")) return "";
+    const path = "photos/" + id.replace(/[^A-Za-z0-9_-]/g,"_").slice(0,75) + ".json";
+    const old = await storage.getFile(path).catch(() => ({etag:null}));
+    await storage.putFile(path, {data:photo}, old.etag);
+    return path.slice("photos/".length, -".json".length);
+  };
+  for (const match of d.matches || []) {
+    const combined = [...(matchNotes[match.label] || [])];
+    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text])));
+    for (let index=0; index<(match.notes||[]).length; index++) {
+      const note = match.notes[index];
+      const photoRef = note.photo ? await savePhoto(note.photo, "m_"+match.label+"_"+note.time+"_"+index) : (note.photoRef || "");
+      const item = {time:note.time,team:note.team,phase:note.phase,text:note.text,photoRef};
+      const key = JSON.stringify([item.time,item.team,item.phase,item.text]);
+      if (!known.has(key)) { combined.push(item); known.add(key); }
+    }
+    matchNotes[match.label] = combined.sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
+  }
+  const teamNotes = remoteTeams.data.teams || {};
+  for (const note of d.team_notes || []) {
+    const rows = teamNotes[note.team] ||= [];
+    const photoRef = note.photo ? await savePhoto(note.photo, "t_"+note.team+"_"+note.time) : (note.photoRef || "");
+    const key = JSON.stringify([note.time,note.text]);
+    if (!rows.some(n => JSON.stringify([n.time,n.text]) === key))
+      rows.push({time:note.time,text:note.text,photoRef});
+  }
+  await storage.putFile("match-notes.json", {schema:1,matches:matchNotes}, remoteMatches.etag);
+  await storage.putFile("team-notes.json", {schema:1,teams:teamNotes}, remoteTeams.etag);
+}
+
+async function deleteSharedNote(kind, args) {
+  const storage = window.AutoScoutTeamStorage;
+  if (kind === "note_delete") {
+    const file = await storage.getFile("match-notes.json");
+    const rows = file.data.matches && file.data.matches[args.match] || [];
+    const index = Number(args.index);
+    if (index >= 0 && index < rows.length) rows.splice(index,1);
+    await storage.putFile("match-notes.json", file.data, file.etag);
+  } else {
+    const file = await storage.getFile("team-notes.json");
+    const team = String(args.team || "");
+    const rows = file.data.teams && file.data.teams[team] || [];
+    const index = Number(args.index);
+    if (index >= 0 && index < rows.length) rows.splice(index,1);
+    if (!rows.length) delete file.data.teams[team];
+    await storage.putFile("team-notes.json", file.data, file.etag);
+  }
+}
+async function loadTeamNotesFromCloud(d) {
+  const storage = window.AutoScoutTeamStorage;
+  if (!storage || !storage.signedIn()) return d;
+  try {
+    const [matchFile, teamFile] = await Promise.all([
+      storage.getFile("match-notes.json").catch(() => ({data:{matches:{}}})),
+      storage.getFile("team-notes.json").catch(() => ({data:{teams:{}}}))
+    ]);
+    const resolvePhoto = async note => {
+      if (!note.photoRef) return note;
+      try { const photo = await storage.getFile("photos/" + note.photoRef + ".json"); return {...note,photo:photo.data.data||""}; }
+      catch { return {...note,photo:""}; }
+    };
+    const matches = matchFile.data.matches || {};
+    d.matches = await Promise.all((d.matches || []).map(async m => ({...m, notes:await Promise.all((matches[m.label] || []).map(async (n,index)=>({...await resolvePhoto(n),index})))})));
+    const teams = teamFile.data.teams || {};
+    d.team_notes = await Promise.all(Object.entries(teams).flatMap(([team, rows]) => rows.map(async (n,index)=>({team,time:n.time,text:n.text,photo:(await resolvePhoto(n)).photo,index}))))
+      .sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
+    d.team_options = [...new Set([...(d.team_options||[]), ...Object.keys(teams)])].sort((a,b)=>Number(a)-Number(b));
+    d.note_count = d.matches.reduce((sum,m)=>sum+(m.notes||[]).length,0);
+  } catch (e) { toast("Could not load shared team notes: " + e.message, true); }
+  return d;
+}
+
 RENDER.notes = async () => {
   const d = await view("notes");
+  await loadTeamNotesFromCloud(d);
   return renderNotesWorkspace(d);
 };
 
@@ -1376,7 +1468,27 @@ async function imageAttachment(label = "Photo") {
       if (!file.type.startsWith("image/")) { toast("Choose an image file.", true); return resolve(""); }
       if (file.size > 4 * 1024 * 1024) { toast("Images must be 4 MB or smaller.", true); return resolve(""); }
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          let quality = 0.68;
+          let data = canvas.toDataURL("image/jpeg", quality);
+          while (data.length > 650000 && quality > 0.35) {
+            quality -= 0.08;
+            data = canvas.toDataURL("image/jpeg", quality);
+          }
+          if (data.length > 680000) { toast("That photo is too large to sync. Try a smaller image.", true); resolve(""); }
+          else resolve(data);
+        };
+        img.onerror = () => { toast("Could not process that image.", true); resolve(""); };
+        img.src = String(reader.result || "");
+      };
       reader.onerror = () => { toast("Could not read that image.", true); resolve(""); };
       reader.readAsDataURL(file);
     }, { once: true });
@@ -1424,6 +1536,67 @@ function notesCard(d, update) {
 }
 
 // ---- Settings --------------------------------------------------------------
+function teamStorageSettingsCard() {
+  const storage = window.AutoScoutTeamStorage;
+  const endpoint = h("input", { type:"url", placeholder:"https://your-worker.workers.dev", value:localStorage.getItem("autoscout_team_storage_url") || "" });
+  const team = h("input", { type:"number", min:1, placeholder:"Team number" });
+  const password = h("input", { type:"password", placeholder:"Shared team password", autocomplete:"current-password" });
+  const registrationKey = h("input", { type:"password", placeholder:"Setup code (only when creating account)" });
+  const status = h("p", { class:"muted small", text: storage && storage.signedIn() ? "Signed in to Team " + storage.currentTeam() : "Not signed in. Local storage continues to work." });
+  const connect = btn("Save server address", () => {
+    if (!storage || !storage.configure(endpoint.value)) { toast("Enter the Worker URL first.", true); return; }
+    toast("Team storage server address saved.");
+  }, "small");
+  const login = btn("Sign in", async () => {
+    try { storage.configure(endpoint.value); await storage.login(team.value,password.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Signed in to team storage."); await rerender(); }
+    catch(e){toast(e.message,true);}
+  }, "primary");
+  const register = btn("Create team account", async () => {
+    try { storage.configure(endpoint.value); await storage.register(team.value,password.value,registrationKey.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Team account created."); await rerender(); }
+    catch(e){toast(e.message,true);}
+  });
+  const signout = btn("Sign out", () => { storage.signOut(); status.textContent="Signed out. Local storage remains available."; toast("Signed out."); rerender(); }, "small");
+  const sync = btn("Upload local notes to team", async () => {
+    try { await syncTeamNotesToCloud(); toast("Notes uploaded to Team "+storage.currentTeam()+"."); }
+    catch(e){toast(e.message,true);}
+  }, "small");
+  const saveCloudSession = btn("Save current session to team", async () => {
+    try {
+      const exported = await act("export", {kind:"session"});
+      if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
+      const slug = (String(S.head && S.head.season || "season") + "_" + String(S.head && S.head.code || "session"))
+        .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
+      const sessionData = JSON.parse(exported.text);
+      sessionData.live_notes = {};
+      sessionData.team_notes = {};
+      await storage.putFile("sessions/" + slug + ".json", sessionData);
+      toast("Session saved to Team " + storage.currentTeam() + ".");
+    } catch(e) { toast(e.message,true); }
+  }, "small");
+  const openCloudSessions = btn("Open shared session", async () => {
+    try {
+      const files = await storage.listFiles();
+      const sessions = files.filter(f => f.path.includes("/sessions/") && f.name.endsWith(".json"));
+      if (!sessions.length) { toast("No shared sessions have been saved yet."); return; }
+      const selected = prompt("Enter the shared session filename:\n" + sessions.map(f=>f.name).join("\n"), sessions[0].name);
+      if (!selected) return;
+      const file = sessions.find(f => f.name === selected.trim());
+      if (!file) { toast("That session filename was not found.", true); return; }
+      const result = await storage.getFile("sessions/" + file.name);
+      const imported = await act("import", {text:JSON.stringify(result.data)});
+      if (!imported.ok) throw new Error(imported.message || "Could not open shared session.");
+      toast("Opened shared session.");
+      await rerender();
+    } catch(e) { toast(e.message,true); }
+  }, "small");
+  return card("Local and team storage",
+    h("p",{class:"muted small",text:"Local mode remains available without an account. Team mode shares notes and photos through the configured public GitHub data repository. Anything uploaded to that public repository is visible to everyone."}),
+    field("Storage Worker URL",endpoint),connect,
+    h("div",{class:"form"},field("Team number",team),field("Team password",password),field("Team setup code",registrationKey)),
+    h("div",{class:"row"},login,register,signout,sync,saveCloudSession,openCloudSessions),status,
+    h("p",{class:"note",text:"Creating accounts requires the registration code configured by the AutoScout administrator. Use a strong shared password. Never reuse a personal password."}));
+}
+
 RENDER.settings = async () => {
   const d = await view("settings");
   const st = { rating: d.rating, faithful: d.faithful, epa_live: d.epa_live, epa_future: d.epa_future, k0: d.k0, kmin: d.kmin,
@@ -1462,6 +1635,7 @@ RENDER.settings = async () => {
         h("p", { class: "muted small" }, d.about.org, "  ·  ", h("a", { href: d.about.website, target: "_blank", rel: "noopener" }, "AutoScout website")),
         h("p", { class: "muted small", text: `Web version: the desktop AutoScout ${S.boot.version} engine running in your browser (Pyodide). Data from the public FTCScout API; no account or key needed.` }),
         h("div", { class: "row" }, btn("What does CAP mean?", () => infoDialog("CAP, OPR and EPA", S.boot.cap_help), "small")))),
+    teamStorageSettingsCard(),
   ];
 };
 
