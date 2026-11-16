@@ -23,7 +23,7 @@ function cors(request, env) {
   if (!origin || allowed.includes(origin)) return {
     "access-control-allow-origin": origin || allowed[0],
     "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "access-control-allow-headers": "Content-Type,Authorization",
+    "access-control-allow-headers": "Content-Type,Authorization,If-Match",
     "access-control-max-age": "86400",
     "vary": "Origin",
   };
