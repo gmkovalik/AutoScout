@@ -144,6 +144,7 @@ const PAGES = [
     ["competition", "Schedule Data", "\u2691\uFE0E", "Live schedule, match details and event statistics"],
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Your event team database"],
+    ["notes", "Match Notes", "▤", "Chronological scouting notes for each match"],
     ["research", "Team Research", "⌕", "Public FTC team intelligence"],
     ["myteam", "My Team", "\u2605\uFE0E", "Your team's performance"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
@@ -608,7 +609,7 @@ function updateLoadUI() {
   for (const bar of document.querySelectorAll("#loadBanner .progress > div, #setupProgress > div")) bar.style.width = (loadUI.frac * 100).toFixed(0) + "%";
   for (const t of document.querySelectorAll("#loadBanner .muted, #setupStatus")) t.textContent = loadUI.msg;
 }
-async function loadEvent(args) {
+async function loadEvent(args, { rerenderAfter = true } = {}) {
   if (S.loading) return;
   S.loading = true;
   loadUI.msg = "Contacting FTCScout…"; loadUI.frac = 0;
@@ -617,11 +618,13 @@ async function loadEvent(args) {
     const r = await act("load", args, (msg, frac) => { loadUI.msg = msg; loadUI.frac = frac; updateLoadUI(); });
     toast(r.message, !r.ok);
     loadUI.msg = r.message || "";
+    return r;
   } catch (e) {
     toast(e.message, true);
+    return { ok: false, message: e.message };
   } finally {
     S.loading = false;
-    rerender();
+    if (rerenderAfter) rerender();
   }
 }
 
@@ -822,25 +825,21 @@ async function saveSession() {
 
 // ---- Teams (+ the team sheet) ---------------------------------------------
 RENDER.teams = async (params) => {
-  const tab = params.tab === "notes" ? "notes" : "teams";
   const team = params.team ? Number(params.team) : 0;
-  const tabs = h("div", { class: "team-subtabs" },
-    btn("Teams", () => go("teams"), tab === "teams" ? "primary" : ""),
-    btn("Notes", () => go("teams", { tab: "notes" }), tab === "notes" ? "primary" : ""));
-  if (tab === "notes") {
-    const d = await view("notes");
-    return [tabs, renderNotesTimeline(d)];
-  }
   const d = await view("teams", { ...S.panel, team });
   const nodes = [
-    tabs,
-    h("p", { class: "muted", text: "Tap a team to chart its statistics, review league participation and edit its inputs." }),
+    h("p", { class: "muted", text: "Select a team to view its charts, league standings, and every meet it attended this season." }),
     dataTable(d.table, { id: "teams", sticky: 2, flash: team || null, onRow: (iid) => go("teams", { team: iid }),
       empty: "No teams loaded. Load a meet on the Setup tab first." }),
   ];
   if (team && d.editor) afterRender.push(() => openTeamSheet(d));
   else if (team) afterRender.push(() => toast(`Team ${team} is not at this event.`, true));
   return nodes;
+};
+
+RENDER.notes = async () => {
+  const d = await view("notes");
+  return renderNotesTimeline(d);
 };
 
 function renderNotesTimeline(d) {
@@ -873,20 +872,49 @@ function renderNotesTimeline(d) {
   ];
 }
 
-function leagueInfoCard(info) {
-  if (!info) return card("League & event participation", h("p", { class: "muted", text: "League information is not available." }));
+function leagueInfoCard(info, teamNumber, onLoadEvent) {
+  if (!info) return card("League standings & meet history", h("p", { class: "muted", text: "League and event information could not be loaded." }));
   const leagues = info.leagues || [];
   const events = info.events || [];
-  return card("League & event participation",
-    leagues.length ? h("div", { class: "league-chip-list" }, leagues.map((league) =>
-      h("span", { class: "league-chip", text: [league.name, league.region].filter(Boolean).join(" · ") }))) :
-      h("p", { class: "muted small", text: "No league membership was returned for this season." }),
-    events.length ? h("div", { class: "league-event-list" }, events.map((event) =>
-      h("a", { class: "league-event-link", href: event.url, target: "_blank", rel: "noopener" },
-        h("span", { class: "league-event-name", text: event.name }),
-        h("span", { class: "muted small", text: [event.date, event.league, event.division ? `Division ${event.division}` : "", event.code].filter(Boolean).join(" · ") })))) :
-      h("p", { class: "muted small", text: "No event participations were returned for this season." }),
-    h("p", { class: "note", text: "Event links open the official FIRST Tech Challenge Events pages." }));
+  const leagueSections = leagues.map((league) => {
+    const rows = league.rankings || [];
+    const mine = league.team_rank;
+    const head = h("div", { class: "league-standing-summary" },
+      h("div", null,
+        h("b", { text: league.name || league.code || "League" }),
+        h("span", { class: "muted small", text: [league.region, league.code].filter(Boolean).join(" · ") })),
+      mine ? h("strong", { class: "league-my-rank", text: `#${mine.rank} overall` }) :
+        h("span", { class: "muted small", text: "No ranking row for this team yet" }));
+    const table = rows.length ? h("div", { class: "league-ranking-wrap" },
+      h("table", { class: "league-ranking-table" },
+        h("thead", null, h("tr", null, ["Rank", "Team", "W", "L", "T", "Qual avg."].map((label) => h("th", { text: label })))),
+        h("tbody", null, rows.map((row) => h("tr", { class: Number(row.number) === Number(teamNumber) ? "my-league-row" : "" },
+          h("td", { text: row.rank ?? "—" }),
+          h("td", null, h("b", { text: row.number || "" }), row.name ? h("span", { class: "muted small", text: " " + row.name }) : null),
+          h("td", { text: row.wins ?? "—" }), h("td", { text: row.losses ?? "—" }),
+          h("td", { text: row.ties ?? "—" }), h("td", { text: row.qual_average == null ? "—" : Number(row.qual_average).toFixed(1) })))))) :
+      h("p", { class: "muted small", text: league.rankings_error || "League rankings are not available yet." });
+    return h("section", { class: "league-standing" }, head, table);
+  });
+  const eventCards = events.map((event) => h("article", { class: "league-event-link" },
+    h("span", { class: "league-event-name", text: event.name }),
+    h("span", { class: "muted small", text: [event.date, event.date_end && event.date_end !== event.date ? event.date_end : "", event.league, event.division ? `Division ${event.division}` : "", event.code, [event.city, event.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") }),
+    h("div", { class: "row league-event-actions" },
+      btn("Load meet in AutoScout", async () => {
+        if (onLoadEvent) return onLoadEvent(event);
+        const loaded = await loadEvent({ season: event.season || info.season, event: event.code, team: String(teamNumber || ""), extra: "",
+          offline: false, history: true, schedule: "" });
+        if (loaded && loaded.ok) go("competition");
+      }, "small primary"),
+      h("a", { href: event.url, target: "_blank", rel: "noopener", class: "muted small" }, "Official event page"))));
+  return card("League standings & meet history",
+    h("p", { class: "muted small", text: `Season ${info.season}: league rankings and every event participation returned for this team.` }),
+    leagueSections.length ? h("div", { class: "league-standing-list" }, leagueSections) :
+      h("p", { class: "muted small", text: "No league memberships were returned for this season." }),
+    h("h4", { class: "league-subheading", text: `Meets attended (${events.length})` }),
+    eventCards.length ? h("div", { class: "league-event-list" }, eventCards) :
+      h("p", { class: "muted small", text: "No meet participations were returned for this season." }),
+    h("p", { class: "note", text: "League standings are cumulative League Meet rankings. League Tournament rankings are separate." }));
 }
 
 function teamPhaseChartCard(charts) {
@@ -933,7 +961,11 @@ function openTeamSheet(d) {
       h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (Technical Issues + Team Focus)" }),
         h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Note", note, "wide")),
         h("div", { class: "row" }, btn("Apply", apply, "primary"))),
-      leagueInfoCard(d.league_info),
+      leagueInfoCard(d.league_info, e.team, async (event) => {
+        const loaded = await loadEvent({ season: event.season || d.league_info.season, event: event.code,
+          team: String(e.team), extra: "", offline: false, history: true, schedule: "" }, { rerenderAfter: false });
+        if (loaded && loaded.ok) { close(); go("competition"); }
+      }),
       panelBox,
       teamPhaseChartCard(d.phase_charts),
     ];
