@@ -637,3 +637,55 @@ body:not(.app-ready) .site-footer { display: none; }
   .match-note-meta .btn { margin-left: 0; }
   .notes-overview { align-items: flex-start; }
 }
+
+
+/* Main-navigation Match Notes page and team league standings. */
+.league-standing-list { display: grid; gap: 12px; margin: 10px 0 18px; }
+.league-standing {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+.league-standing-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.league-standing-summary > div { display: grid; gap: 2px; }
+.league-my-rank {
+  color: #fff;
+  background: var(--brand);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+.league-ranking-wrap { max-width: 100%; overflow-x: auto; }
+.league-ranking-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.league-ranking-table th {
+  padding: 8px 9px;
+  color: #fff;
+  background: var(--brand);
+  text-align: left;
+  white-space: nowrap;
+}
+.league-ranking-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.league-ranking-table tbody tr:last-child td { border-bottom: 0; }
+.league-ranking-table .my-league-row { background: #fff2b8; color: #182236; font-weight: 700; }
+.league-subheading { margin: 18px 0 8px; color: var(--brand); }
+.league-event-actions { align-items: center; gap: 10px; margin-top: 5px; }
+.league-event-actions a { text-decoration: underline; }
+.league-event-link { min-width: 0; }
+@media(max-width:600px) {
+  .league-standing { padding: 9px; }
+  .league-ranking-table { font-size: 12px; }
+  .league-ranking-table th, .league-ranking-table td { padding: 6px 7px; }
+}
