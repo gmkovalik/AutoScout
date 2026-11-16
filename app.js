@@ -856,12 +856,21 @@ async function syncTeamNotesToCloud() {
     storage.getFile("team-notes.json").catch(() => ({data:{teams:{}},etag:null}))
   ]);
   const matchNotes = remoteMatches.data.matches || {};
+  const savePhoto = async (photo, id) => {
+    if (!photo || !String(photo).startsWith("data:image/")) return "";
+    const path = "photos/" + id.replace(/[^A-Za-z0-9_-]/g,"_").slice(0,75) + ".json";
+    const old = await storage.getFile(path).catch(() => ({etag:null}));
+    await storage.putFile(path, {data:photo}, old.etag);
+    return path.slice("photos/".length, -".json".length);
+  };
   for (const match of d.matches || []) {
     const combined = [...(matchNotes[match.label] || [])];
-    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text,n.photo])));
-    for (const note of match.notes || []) {
-      const item = {time:note.time,team:note.team,phase:note.phase,text:note.text,photo:note.photo};
-      const key = JSON.stringify([item.time,item.team,item.phase,item.text,item.photo]);
+    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text,n.photoRef||n.photo])));
+    for (let index=0; index<(match.notes||[]).length; index++) {
+      const note = match.notes[index];
+      const photoRef = note.photo ? await savePhoto(note.photo, "m_"+match.label+"_"+note.time+"_"+index) : (note.photoRef || "");
+      const item = {time:note.time,team:note.team,phase:note.phase,text:note.text,photoRef};
+      const key = JSON.stringify([item.time,item.team,item.phase,item.text,item.photoRef]);
       if (!known.has(key)) { combined.push(item); known.add(key); }
     }
     matchNotes[match.label] = combined.sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
@@ -869,9 +878,10 @@ async function syncTeamNotesToCloud() {
   const teamNotes = remoteTeams.data.teams || {};
   for (const note of d.team_notes || []) {
     const rows = teamNotes[note.team] ||= [];
-    const key = JSON.stringify([note.time,note.text,note.photo]);
-    if (!rows.some(n => JSON.stringify([n.time,n.text,n.photo]) === key))
-      rows.push({time:note.time,text:note.text,photo:note.photo});
+    const photoRef = note.photo ? await savePhoto(note.photo, "t_"+note.team+"_"+note.time) : (note.photoRef || "");
+    const key = JSON.stringify([note.time,note.text,photoRef]);
+    if (!rows.some(n => JSON.stringify([n.time,n.text,n.photoRef||n.photo]) === key))
+      rows.push({time:note.time,text:note.text,photoRef});
   }
   await storage.putFile("match-notes.json", {schema:1,matches:matchNotes}, remoteMatches.etag);
   await storage.putFile("team-notes.json", {schema:1,teams:teamNotes}, remoteTeams.etag);
@@ -903,10 +913,15 @@ async function loadTeamNotesFromCloud(d) {
       storage.getFile("match-notes.json").catch(() => ({data:{matches:{}}})),
       storage.getFile("team-notes.json").catch(() => ({data:{teams:{}}}))
     ]);
+    const resolvePhoto = async note => {
+      if (!note.photoRef) return note;
+      try { const photo = await storage.getFile("photos/" + note.photoRef + ".json"); return {...note,photo:photo.data.data||""}; }
+      catch { return {...note,photo:""}; }
+    };
     const matches = matchFile.data.matches || {};
-    d.matches = (d.matches || []).map(m => ({...m, notes:(matches[m.label] || []).map((n,index)=>({...n,index}))}));
+    d.matches = await Promise.all((d.matches || []).map(async m => ({...m, notes:await Promise.all((matches[m.label] || []).map(async (n,index)=>({...await resolvePhoto(n),index})))})));
     const teams = teamFile.data.teams || {};
-    d.team_notes = Object.entries(teams).flatMap(([team, rows]) => rows.map((n,index)=>({team,time:n.time,text:n.text,photo:n.photo,index})))
+    d.team_notes = await Promise.all(Object.entries(teams).flatMap(([team, rows]) => rows.map(async (n,index)=>({team,time:n.time,text:n.text,photo:(await resolvePhoto(n)).photo,index}))))
       .sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
     d.team_options = [...new Set([...(d.team_options||[]), ...Object.keys(teams)])].sort((a,b)=>Number(a)-Number(b));
     d.note_count = d.matches.reduce((sum,m)=>sum+(m.notes||[]).length,0);
