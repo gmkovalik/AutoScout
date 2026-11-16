@@ -425,8 +425,9 @@ def view_setup(o):
 
 
 def _team_league_info(team: int, season: int) -> dict:
-    """Load public league membership and event participation, with official FTC Events links."""
+    """Return this season's league standings and every event participation for a team."""
     client = APP.make_client(offline=False)
+
     def rows_from(value, *keys):
         if isinstance(value, list):
             return value
@@ -437,15 +438,24 @@ def _team_league_info(team: int, season: int) -> dict:
                     return candidate
         return []
 
+    def nested(obj, *keys):
+        for key in keys:
+            value = obj.get(key) if isinstance(obj, dict) else None
+            if isinstance(value, dict):
+                return value
+        return {}
+
     leagues_raw, events_raw = [], []
     try:
         leagues_raw = rows_from(client.get_json(
-            f"teams/{team}/leagues?season={int(season)}", max_age=3600), "leagues", "results", "data")
+            f"teams/{int(team)}/leagues?season={int(season)}", max_age=3600),
+            "leagues", "results", "data")
     except Exception:
         pass
     try:
         events_raw = rows_from(client.get_json(
-            f"teams/{team}/events/{int(season)}", max_age=3600), "events", "participations", "results", "data")
+            f"teams/{int(team)}/events/{int(season)}", max_age=3600),
+            "events", "participations", "results", "data")
     except Exception:
         pass
 
@@ -454,55 +464,117 @@ def _team_league_info(team: int, season: int) -> dict:
     for item in leagues_raw:
         if not isinstance(item, dict):
             continue
-        code = str(item.get("code") or item.get("leagueCode") or "").strip()
-        region = str(item.get("regionCode") or item.get("region") or "").strip()
-        name = str(item.get("name") or item.get("leagueName") or code or "League").strip()
-        entry = {"name": name, "code": code, "region": region}
+        league_obj = nested(item, "league")
+        code = str(item.get("leagueCode") or item.get("code") or
+                   league_obj.get("leagueCode") or league_obj.get("code") or "").strip()
+        region_obj = nested(item, "region") or nested(league_obj, "region")
+        region_value = item.get("regionCode") or league_obj.get("regionCode") or ""
+        if not region_value and isinstance(item.get("region"), str):
+            region_value = item.get("region")
+        if not region_value:
+            region_value = region_obj.get("code") or region_obj.get("regionCode") or ""
+        region = str(region_value).strip()
+        name = str(item.get("name") or item.get("leagueName") or
+                   league_obj.get("name") or league_obj.get("leagueName") or code or "League").strip()
+        entry = {"name": name, "code": code, "region": region, "rank": None,
+                 "team_rank": None, "rankings": [], "rankings_error": ""}
         leagues.append(entry)
         if code:
             league_by_code[code.casefold()] = entry
         league_by_code[name.casefold()] = entry
+
+    # FTCScout exposes cumulative league rankings at this route. These are
+    # League Meet rankings, not League Tournament rankings.
+    for league in leagues:
+        if not league["code"] or not league["region"]:
+            league["rankings_error"] = "League region or code was not supplied by the API."
+            continue
+        try:
+            ranking_raw = client.get_json(
+                f"leagues/{int(season)}/{urllib.parse.quote(league['region'], safe='')}/"
+                f"{urllib.parse.quote(league['code'], safe='')}/teams", max_age=1800)
+            ranking_rows = rows_from(ranking_raw, "teams", "rankings", "results", "data")
+            clean = []
+            for row in ranking_rows:
+                if not isinstance(row, dict):
+                    continue
+                team_obj = nested(row, "team")
+                stats = nested(row, "stats")
+                number = row.get("teamNumber") or row.get("number") or team_obj.get("teamNumber") or team_obj.get("number")
+                try:
+                    number = int(number)
+                except (TypeError, ValueError):
+                    number = 0
+                rank = row.get("rank") or row.get("ranking") or row.get("position")
+                record = {
+                    "rank": rank,
+                    "number": number,
+                    "name": str(row.get("teamName") or row.get("name") or team_obj.get("name") or ""),
+                    "wins": row.get("wins", stats.get("wins")),
+                    "losses": row.get("losses", stats.get("losses")),
+                    "ties": row.get("ties", stats.get("ties")),
+                    "qual_average": row.get("qualAverage", stats.get("qualAverage")),
+                    "matches_played": row.get("matchesPlayed", stats.get("matchesPlayed"))
+                }
+                clean.append(record)
+            clean.sort(key=lambda row: (int(row["rank"]) if str(row["rank"] or "").isdigit() else 999999,
+                                        row["number"]))
+            league["rankings"] = clean
+            mine = next((row for row in clean if row["number"] == int(team)), None)
+            league["team_rank"] = mine
+            league["rank"] = mine.get("rank") if mine else None
+        except Exception as exc:
+            league["rankings_error"] = str(exc)
 
     events = []
     seen = set()
     for item in events_raw:
         if not isinstance(item, dict):
             continue
-        event = item.get("event") if isinstance(item.get("event"), dict) else item
-        code = str(event.get("code") or event.get("eventCode") or item.get("eventCode") or "").strip()
+        event = nested(item, "event") or item
+        code = str(event.get("code") or event.get("eventCode") or
+                   item.get("eventCode") or item.get("code") or "").strip()
         if not code or code.casefold() in seen:
             continue
         seen.add(code.casefold())
-        league_code = str(item.get("leagueCode") or event.get("leagueCode") or "").strip()
-        league_name = str(item.get("leagueName") or event.get("leagueName") or
+        league_obj = nested(item, "league") or nested(event, "league")
+        league_code = str(item.get("leagueCode") or event.get("leagueCode") or league_obj.get("code") or "").strip()
+        league_name = str(item.get("leagueName") or event.get("leagueName") or league_obj.get("name") or
                           (item.get("league") if isinstance(item.get("league"), str) else "") or "").strip()
         league = league_by_code.get(league_code.casefold()) or league_by_code.get(league_name.casefold())
-        if not league and league_name:
-            league = {"name": league_name, "code": league_code, "region": ""}
         date = str(event.get("dateStart") or event.get("startDate") or item.get("dateStart") or "")
-        name = str(event.get("name") or event.get("eventName") or code)
-        division = str(event.get("divisionCode") or event.get("division") or "").strip()
-        if not division:
+        date_end = str(event.get("dateEnd") or event.get("endDate") or item.get("dateEnd") or "")
+        name = str(event.get("name") or event.get("eventName") or item.get("eventName") or code)
+        division = str(event.get("divisionCode") or event.get("division") or item.get("divisionCode") or "").strip()
+        city = str(event.get("city") or item.get("city") or "").strip()
+        state = str(event.get("stateprov") or event.get("state") or item.get("stateprov") or "").strip()
+        country = str(event.get("country") or item.get("country") or "").strip()
+        if not date or not division or not league_code:
             try:
                 official_event = client.event(int(season), code, max_age=3600)
                 if isinstance(official_event, dict):
-                    division = str(official_event.get("divisionCode") or official_event.get("division") or "").strip()
                     date = date or str(official_event.get("dateStart") or official_event.get("start") or "")
+                    date_end = date_end or str(official_event.get("dateEnd") or official_event.get("end") or "")
                     name = str(official_event.get("name") or name)
+                    division = division or str(official_event.get("divisionCode") or official_event.get("division") or "").strip()
                     league_code = league_code or str(official_event.get("leagueCode") or "").strip()
                     league_name = league_name or str(official_event.get("leagueName") or "").strip()
+                    city = city or str(official_event.get("city") or "").strip()
+                    state = state or str(official_event.get("stateprov") or official_event.get("state") or "").strip()
+                    country = country or str(official_event.get("country") or "").strip()
                     league = league or league_by_code.get(league_code.casefold()) or league_by_code.get(league_name.casefold())
             except Exception:
                 pass
-        events.append({"name": name, "code": code, "date": date,
-                       "league": (league or {}).get("name", league_name),
-                       "league_code": (league or {}).get("code", league_code),
-                       "division": division,
-                       "url": f"https://ftc-events.firstinspires.org/{int(season)}/{code}"})
-    events.sort(key=lambda row: (row.get("date") or "9999", row["name"].casefold()))
+        events.append({
+            "name": name, "code": code, "season": int(season), "date": date, "date_end": date_end,
+            "league": (league or {}).get("name", league_name),
+            "league_code": (league or {}).get("code", league_code),
+            "division": division, "city": city, "state": state, "country": country,
+            "url": f"https://ftc-events.firstinspires.org/{int(season)}/{code}"
+        })
+    events.sort(key=lambda row: (row.get("date") or "9999", row["name"].casefold(), row["code"]))
     return {"season": int(season), "leagues": leagues, "events": events,
-            "source": "FTC Events event pages", "official_url": "https://ftc-events.firstinspires.org/"}
-
+            "source": "FTCScout REST API", "official_url": "https://ftc-events.firstinspires.org/"}
 
 def _team_phase_chart(team: int, season: int, event_code: str, scope: str) -> dict:
     """Chart actual alliance phase totals for the team's matches when FTCScout supplies them."""
