@@ -880,7 +880,8 @@ async function loadTeamNotesFromCloud(d) {
 
 RENDER.notes = async () => {
   const d = await view("notes");
-  await loadTeamNotesFromCloud(d);\n  return renderNotesWorkspace(d);
+  await loadTeamNotesFromCloud(d);
+  return renderNotesWorkspace(d);
 };
 
 function renderNotesWorkspace(d) {
