@@ -618,8 +618,10 @@ async function loadEvent(args) {
     const r = await act("load", args, (msg, frac) => { loadUI.msg = msg; loadUI.frac = frac; updateLoadUI(); });
     toast(r.message, !r.ok);
     loadUI.msg = r.message || "";
+    return r;
   } catch (e) {
     toast(e.message, true);
+    return { ok: false, message: e.message };
   } finally {
     S.loading = false;
     rerender();
@@ -899,9 +901,9 @@ function leagueInfoCard(info, teamNumber) {
     h("span", { class: "muted small", text: [event.date, event.date_end && event.date_end !== event.date ? event.date_end : "", event.league, event.division ? `Division ${event.division}` : "", event.code, [event.city, event.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") }),
     h("div", { class: "row league-event-actions" },
       btn("Load meet in AutoScout", async () => {
-        await loadEvent({ season: event.season || info.season, event: event.code, team: String(teamNumber || ""), extra: "",
+        const loaded = await loadEvent({ season: event.season || info.season, event: event.code, team: String(teamNumber || ""), extra: "",
           offline: false, history: true, schedule: "" });
-        if (!S.loading) go("competition");
+        if (loaded && loaded.ok) go("competition");
       }, "small primary"),
       h("a", { href: event.url, target: "_blank", rel: "noopener", class: "muted small" }, "Official event page"))));
   return card("League standings & meet history",
