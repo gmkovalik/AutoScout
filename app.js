@@ -1488,11 +1488,42 @@ function teamStorageSettingsCard() {
     try { await syncTeamNotesToCloud(); toast("Notes uploaded to Team "+storage.currentTeam()+"."); }
     catch(e){toast(e.message,true);}
   }, "small");
+  const saveCloudSession = btn("Save current session to team", async () => {
+    try {
+      const exported = await act("action", "export", {kind:"session"});
+      if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
+      const slug = (String(S.head && S.head.season || "season") + "_" + String(S.head && S.head.code || "session"))
+        .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
+      await storage.putFile("sessions/" + slug + ".json", JSON.parse(exported.text));
+      toast("Session saved to Team " + storage.currentTeam() + ".");
+    } catch(e) { toast(e.message,true); }
+  }, "small");
+  const openCloudSessions = btn("Refresh shared sessions", async () => {
+    try {
+      const files = await storage.listFiles();
+      const sessions = files.filter(f => f.path.includes("/sessions/") && f.name.endsWith(".json"));
+      const choices = sessions.map(f => btn("Open " + f.name.replace(/\\.json$/,""), async () => {
+        try {
+          const result = await storage.getFile("sessions/" + f.name);
+          const imported = await act("action", "import", {text:JSON.stringify(result.data)});
+          if (!imported.ok) throw new Error(imported.message || "Could not open shared session.");
+          toast("Opened shared session.");
+          await rerender();
+        } catch(e) { toast(e.message,true); }
+      }, "small"));
+      infoDialog("Shared team sessions", sessions.length ? "Select a session to open. " + sessions.map(f=>f.name).join(", ") : "No shared sessions have been saved yet.");
+      if (choices.length) {
+        const dialog = document.querySelector("#dialog");
+        const body = dialog && dialog.querySelector(".dialog-body");
+        if (body) body.append(...choices);
+      }
+    } catch(e) { toast(e.message,true); }
+  }, "small");
   return card("Local and team storage",
     h("p",{class:"muted small",text:"Local mode remains available without an account. Team mode shares notes and photos through the configured public GitHub data repository. Anything uploaded to that public repository is visible to everyone."}),
     field("Storage Worker URL",endpoint),connect,
     h("div",{class:"form"},field("Team number",team),field("Team password",password),field("Team setup code",registrationKey)),
-    h("div",{class:"row"},login,register,signout,sync),status,
+    h("div",{class:"row"},login,register,signout,sync,saveCloudSession,openCloudSessions),status,
     h("p",{class:"note",text:"Creating accounts requires the registration code configured by the AutoScout administrator. Use a strong shared password. Never reuse a personal password."}));
 }
 
