@@ -145,7 +145,7 @@ const PAGES = [
     ["competition", "Schedule Data", "\u2691\uFE0E", "Live schedule, match details and event statistics"],
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Your event team database"],
-    ["notes", "Notes", "▤", "Match notes and team notes"],
+    ["notes", "Notes", "✎", "Match notes and team notes"],
     ["research", "Team Research", "⌕", "Public FTC team intelligence"],
     ["myteam", "My Team", "\u2605\uFE0E", "Your team's performance"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
