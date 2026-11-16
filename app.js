@@ -609,7 +609,7 @@ function updateLoadUI() {
   for (const bar of document.querySelectorAll("#loadBanner .progress > div, #setupProgress > div")) bar.style.width = (loadUI.frac * 100).toFixed(0) + "%";
   for (const t of document.querySelectorAll("#loadBanner .muted, #setupStatus")) t.textContent = loadUI.msg;
 }
-async function loadEvent(args) {
+async function loadEvent(args, { rerenderAfter = true } = {}) {
   if (S.loading) return;
   S.loading = true;
   loadUI.msg = "Contacting FTCScout…"; loadUI.frac = 0;
@@ -624,7 +624,7 @@ async function loadEvent(args) {
     return { ok: false, message: e.message };
   } finally {
     S.loading = false;
-    rerender();
+    if (rerenderAfter) rerender();
   }
 }
 
@@ -872,7 +872,7 @@ function renderNotesTimeline(d) {
   ];
 }
 
-function leagueInfoCard(info, teamNumber) {
+function leagueInfoCard(info, teamNumber, onLoadEvent) {
   if (!info) return card("League standings & meet history", h("p", { class: "muted", text: "League and event information could not be loaded." }));
   const leagues = info.leagues || [];
   const events = info.events || [];
@@ -901,6 +901,7 @@ function leagueInfoCard(info, teamNumber) {
     h("span", { class: "muted small", text: [event.date, event.date_end && event.date_end !== event.date ? event.date_end : "", event.league, event.division ? `Division ${event.division}` : "", event.code, [event.city, event.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") }),
     h("div", { class: "row league-event-actions" },
       btn("Load meet in AutoScout", async () => {
+        if (onLoadEvent) return onLoadEvent(event);
         const loaded = await loadEvent({ season: event.season || info.season, event: event.code, team: String(teamNumber || ""), extra: "",
           offline: false, history: true, schedule: "" });
         if (loaded && loaded.ok) go("competition");
@@ -960,7 +961,11 @@ function openTeamSheet(d) {
       h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (Technical Issues + Team Focus)" }),
         h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Note", note, "wide")),
         h("div", { class: "row" }, btn("Apply", apply, "primary"))),
-      leagueInfoCard(d.league_info, e.team),
+      leagueInfoCard(d.league_info, e.team, async (event) => {
+        const loaded = await loadEvent({ season: event.season || d.league_info.season, event: event.code,
+          team: String(e.team), extra: "", offline: false, history: true, schedule: "" }, { rerenderAfter: false });
+        if (loaded && loaded.ok) { close(); go("competition"); }
+      }),
       panelBox,
       teamPhaseChartCard(d.phase_charts),
     ];
