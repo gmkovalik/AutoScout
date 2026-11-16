@@ -424,6 +424,74 @@ def view_setup(o):
             "offline": bool(A.config.get("offline", False)), "sessions": list_sessions()}
 
 
+def _team_league_info(team: int, season: int) -> dict:
+    """Load public league membership and event participation, with official FTC Events links."""
+    client = APP.make_client(offline=False)
+    def rows_from(value, *keys):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            for key in keys:
+                candidate = value.get(key)
+                if isinstance(candidate, list):
+                    return candidate
+        return []
+
+    leagues_raw, events_raw = [], []
+    try:
+        leagues_raw = rows_from(client.get_json(
+            f"teams/{team}/leagues?season={int(season)}", max_age=3600), "leagues", "results", "data")
+    except Exception:
+        pass
+    try:
+        events_raw = rows_from(client.get_json(
+            f"teams/{team}/events/{int(season)}", max_age=3600), "events", "participations", "results", "data")
+    except Exception:
+        pass
+
+    leagues = []
+    league_by_code = {}
+    for item in leagues_raw:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or item.get("leagueCode") or "").strip()
+        region = str(item.get("regionCode") or item.get("region") or "").strip()
+        name = str(item.get("name") or item.get("leagueName") or code or "League").strip()
+        entry = {"name": name, "code": code, "region": region}
+        leagues.append(entry)
+        if code:
+            league_by_code[code.casefold()] = entry
+        league_by_code[name.casefold()] = entry
+
+    events = []
+    seen = set()
+    for item in events_raw:
+        if not isinstance(item, dict):
+            continue
+        event = item.get("event") if isinstance(item.get("event"), dict) else item
+        code = str(event.get("code") or event.get("eventCode") or item.get("eventCode") or "").strip()
+        if not code or code.casefold() in seen:
+            continue
+        seen.add(code.casefold())
+        league_code = str(item.get("leagueCode") or event.get("leagueCode") or "").strip()
+        league_name = str(item.get("leagueName") or event.get("leagueName") or
+                          (item.get("league") if isinstance(item.get("league"), str) else "") or "").strip()
+        league = league_by_code.get(league_code.casefold()) or league_by_code.get(league_name.casefold())
+        if not league and league_name:
+            league = {"name": league_name, "code": league_code, "region": ""}
+        date = str(event.get("dateStart") or event.get("startDate") or item.get("dateStart") or "")
+        name = str(event.get("name") or event.get("eventName") or code)
+        division = str(event.get("divisionCode") or event.get("division") or "").strip()
+        events.append({"name": name, "code": code, "date": date,
+                       "league": (league or {}).get("name", league_name),
+                       "league_code": (league or {}).get("code", league_code),
+                       "division": division,
+                       "url": f"https://ftc-events.firstinspires.org/{int(season)}/{code}"})
+    events.sort(key=lambda row: (row.get("date") or "9999", row["name"].casefold()))
+    return {"season": int(season), "leagues": leagues, "events": events,
+            "source": "FTC Events event pages", "official_url": "https://ftc-events.firstinspires.org/"}
+
+
 def view_teams(o):
     p = probe(A.TeamsTab, _editing=0, _panel_added=False)
     p.refresh()
@@ -434,7 +502,31 @@ def view_teams(o):
         out["editor"] = {"team": team, "title": p.sel_var.get(), "tdc": p.tdc_var.get(),
                          "delta": p.delta_var.get(), "focus": p.focus_var.get(), "note": p.note_var.get()}
         out["panel"] = _team_panel(team, o)
+        out["league_info"] = _team_league_info(team, APP.session.season)
     return out
+
+
+def view_notes(o):
+    s = APP.session
+    matches = []
+    for match in s.matches:
+        notes = list(s.live_notes.get(match.label, []))
+        notes.sort(key=lambda note: str(note.get("time") or ""))
+        matches.append({
+            "label": match.label,
+            "red": list(match.red),
+            "blue": list(match.blue),
+            "played": bool(getattr(match, "played", False)),
+            "score": str(getattr(match, "score", "") or ""),
+            "notes": [{"time": str(note.get("time") or ""),
+                       "team": str(note.get("team") or "General"),
+                       "phase": str(note.get("phase") or "Overall"),
+                       "text": str(note.get("text") or ""),
+                       "index": index}
+                      for index, note in enumerate(s.live_notes.get(match.label, []))]
+        })
+    return {"loaded": bool(s.matches), "event": s.event_name, "season": s.season,
+            "matches": matches, "note_count": sum(len(row["notes"]) for row in matches)}
 
 
 def _team_panel(team: int, o: dict) -> dict:
@@ -626,7 +718,7 @@ def view_settings(o):
 
 
 VIEWS = {"overview": view_overview, "competition": view_competition, "setup": view_setup,
-         "teams": view_teams, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
+         "teams": view_teams, "notes": view_notes, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
          "standings": view_standings, "alliances": view_alliances, "winrate": view_winrate,
          "analysis": view_analysis, "charts": view_charts, "live": view_live,
          "research": view_research, "settings": view_settings}
