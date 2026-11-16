@@ -482,6 +482,18 @@ def _team_league_info(team: int, season: int) -> dict:
         date = str(event.get("dateStart") or event.get("startDate") or item.get("dateStart") or "")
         name = str(event.get("name") or event.get("eventName") or code)
         division = str(event.get("divisionCode") or event.get("division") or "").strip()
+        if not division:
+            try:
+                official_event = client.event(int(season), code, max_age=3600)
+                if isinstance(official_event, dict):
+                    division = str(official_event.get("divisionCode") or official_event.get("division") or "").strip()
+                    date = date or str(official_event.get("dateStart") or official_event.get("start") or "")
+                    name = str(official_event.get("name") or name)
+                    league_code = league_code or str(official_event.get("leagueCode") or "").strip()
+                    league_name = league_name or str(official_event.get("leagueName") or "").strip()
+                    league = league or league_by_code.get(league_code.casefold()) or league_by_code.get(league_name.casefold())
+            except Exception:
+                pass
         events.append({"name": name, "code": code, "date": date,
                        "league": (league or {}).get("name", league_name),
                        "league_code": (league or {}).get("code", league_code),
@@ -540,8 +552,9 @@ def _team_phase_chart(team: int, season: int, event_code: str, scope: str) -> di
             order = float(match.get("matchNumber") or item.get("matchNumber") or len(rows) + 1)
         except (TypeError, ValueError):
             order = float(len(rows) + 1)
-        rows.append((code, label, order, auto, teleop, endgame))
-    rows.sort(key=lambda row: (row[0], row[2], row[1]))
+        event_date = str(event.get("dateStart") or event.get("startDate") or item.get("dateStart") or "")
+        rows.append((code, label, order, auto, teleop, endgame, event_date))
+    rows.sort(key=lambda row: (row[6], row[2], row[1]))
     if not rows:
         return {"title": "Auto / Teleop / Endgame by match", "series": [],
                 "note": "FTCScout did not return phase-by-phase scores for these matches. Overall match scores are not substituted for phase data."}
