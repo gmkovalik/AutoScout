@@ -6,3 +6,7 @@ compatibility_date = "2026-11-16"
 ALLOWED_ORIGIN = "https://gmkovalik.github.io"
 DATA_REPO = "gmkovalik/AutoScout-Data"
 # Add GITHUB_TOKEN, AUTH_PEPPER, and REGISTRATION_KEY as Worker secrets.
+
+[previews.vars]
+ALLOWED_ORIGIN = "https://example.com"
+DATA_REPO = "preview/AutoScout-Data"
