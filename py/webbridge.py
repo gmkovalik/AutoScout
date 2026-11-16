@@ -581,20 +581,24 @@ def view_notes(o):
     s = APP.session
     matches = []
     for match in s.matches:
-        indexed_notes = list(enumerate(s.live_notes.get(match.label, [])))
-        indexed_notes.sort(key=lambda pair: (str(pair[1].get("time") or ""), pair[0]))
+        raw_notes = list(enumerate(s.live_notes.get(match.label, [])))
+        raw_notes.sort(key=lambda pair: (str(pair[1].get("time") or ""), pair[0]))
+        notes = [{"time": str(note.get("time") or ""),
+                  "team": str(note.get("team") or "General"),
+                  "phase": str(note.get("phase") or "Overall"),
+                  "text": str(note.get("text") or ""),
+                  "index": index}
+                 for index, note in raw_notes]
+        score = ""
+        if match.red_score is not None and match.blue_score is not None:
+            score = f"{match.red_score:g} - {match.blue_score:g}"
         matches.append({
             "label": match.label,
             "red": list(match.red),
             "blue": list(match.blue),
             "played": bool(getattr(match, "played", False)),
-            "score": str(getattr(match, "score", "") or ""),
-            "notes": [{"time": str(note.get("time") or ""),
-                       "team": str(note.get("team") or "General"),
-                       "phase": str(note.get("phase") or "Overall"),
-                       "text": str(note.get("text") or ""),
-                       "index": index}
-                      for index, note in indexed_notes]
+            "score": score,
+            "notes": notes
         })
     return {"loaded": bool(s.matches), "event": s.event_name, "season": s.season,
             "matches": matches, "note_count": sum(len(row["notes"]) for row in matches)}
