@@ -21,7 +21,7 @@ This is shared-workspace access control, not confidentiality. Do not put private
 
 ## Worker setup
 
-1. Create a separate **public** repository for team data, for example `gmkovalik/AutoScout-Data`. Do not use the application repository for scouting data.
+1. The public data repository `gmkovalik/AutoScout-Data` is already created. The included `wrangler.toml` sets `DATA_REPO` to it. Do not use the application repository for scouting data.
 2. Create a Cloudflare Worker from `index.js`.
 3. Set Worker variables:
    - `DATA_REPO`: the data repository in `owner/repo` format.
@@ -51,6 +51,6 @@ This is shared-workspace access control, not confidentiality. Do not put private
 
 Allowed paths are `match-notes.json`, `team-notes.json`, `sessions/<id>.json`, and `photos/<id>.json`. Each file is limited to 700 KB to stay within the GitHub Contents API's practical limits. Store resized/compressed photo data in the photo JSON file.
 
-## Current implementation boundary
+## AutoScout UI integration in this branch
 
 This is the storage service and browser API client foundation. The existing Notes and Save Session screens have **not yet been wired** to call this client. Until that follow-up integration is complete and the Worker is deployed with secrets, AutoScout continues to save locally exactly as it does now. No existing local notes or sessions are migrated or uploaded automatically.
