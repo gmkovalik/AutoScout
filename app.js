@@ -1566,7 +1566,9 @@ function teamStorageSettingsCard() {
       if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
       const slug = (String(S.head && S.head.season || "season") + "_" + String(S.head && S.head.code || "session"))
         .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
-      const sessionData = JSON.parse(exported.text);\n      sessionData.live_notes = {};\n      sessionData.team_notes = {};\n      await storage.putFile("sessions/" + slug + ".json", sessionData);
+      const sessionData = JSON.parse(exported.text);
+      sessionData.live_notes = {};
+      sessionData.team_notes = {};\n      await storage.putFile("sessions/" + slug + ".json", sessionData);
       toast("Session saved to Team " + storage.currentTeam() + ".");
     } catch(e) { toast(e.message,true); }
   }, "small");
