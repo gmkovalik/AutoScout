@@ -671,8 +671,7 @@ RENDER.overview = async () => {
         action("01", "Load an event", "Bring in teams, schedule, and match results.", "setup", !d.head.loaded),
         action("02", "Scout a match", "Review matchups and enter your observations.", "matches"),
         action("03", "Research any team", "Explore public season data, records, and performance graphs.", "research"),
-        action("04", "Build an alliance", "Compare team strengths and identify promising combinations.", "alliances"),
-        action("05", "Open live scouting", "Keep match notes organized while following a stream.", "live"))),
+        action("04", "Build an alliance", "Compare team strengths and identify promising combinations.", "alliances"))),
       card("Workflow", h("div", { class: "steps" }, steps.map(([n, t, s]) => h("div", { class: "step" },
         h("span", { class: "n", text: n }), h("div", null, h("b", { text: t }), h("span", { text: s }))))),
       h("p", { class: "note", text: isPhone() ? "Tip: the ☰ menu lists every workspace." : "Tip: use Ctrl+K (⌘K on a Mac) to jump to any workspace." }))),
@@ -705,7 +704,7 @@ RENDER.competition = async (params) => {
       h("span", { class: "muted small", text: "every" }),
       h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "64px" }, onchange: (e) => { S.auto.minutes = Math.max(1, Number(e.target.value) || 2); if (S.auto.on) setAuto(true); } }),
       h("span", { class: "muted small", text: "min" }),
-      btn("Open live scouting", () => go("live")), btn("Alliance selection", () => go("alliances")),
+      btn("Alliance selection", () => go("alliances")),
       btn("Team research", () => go("research")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
     card("Matches", matches),
   ];
@@ -1237,7 +1236,7 @@ async function openMatchDetails(label) {
       noteBox,
       h("div", { class: "foot" },
         matchRow ? btn("Edit score", () => { close(); resultDialog(String(label), matchRow[1], matchColumns); }, "small") : null,
-        btn("Open Live Scouting", () => { close(); go("live", { match: String(label) }); }, "primary")),
+        null),
     ], { wide: true });
   } catch (e) { toast("Could not load match details: " + e.message, true); }
 }
@@ -1410,54 +1409,7 @@ RENDER.charts = async (params) => {
       btn("Explain this chart", () => infoDialog("What this chart shows", d.explain_long), "small"))];
 };
 
-// ---- Live Scouting ---------------------------------------------------------
-function youtubeEmbed(url) {
-  try {
-    const u = new URL(url);
-    let id = "";
-    if (u.hostname === "youtu.be") id = u.pathname.slice(1);
-    else if (u.searchParams.get("v")) id = u.searchParams.get("v");
-    else { const m = u.pathname.match(/^\/(?:live|embed|shorts)\/([\w-]{6,})/); if (m) id = m[1]; }
-    id = (id || "").split("/")[0];
-    return /^[\w-]{6,}$/.test(id) ? `https://www.youtube-nocookie.com/embed/${id}?playsinline=1&rel=0` : "";
-  } catch { return ""; }
-}
-
-RENDER.live = async () => {
-  const d = await view("live", { match: S.live.match });
-  S.live.match = d.match;
-  const query = h("input", { type: "search", value: S.live.query || d.query });
-  const url = h("input", { type: "url", value: d.stream, placeholder: "https://www.youtube.com/watch?v=…", autocapitalize: "off" });
-  const embed = d.stream ? youtubeEmbed(d.stream) : "";
-  const player = embed ? h("div", { class: "video" }, h("iframe", { src: embed, title: "Meet video", allow: "autoplay; encrypted-media; picture-in-picture; fullscreen", allowfullscreen: true }))
-    : h("p", { class: "muted", text: d.stream ? "This link can't play inside the page (channel or search links can't). Use Open video." : "No stream selected" });
-  const yt = async (live) => {
-    S.live.query = query.value;
-    const r = await runAction("youtube", { live, query: query.value }, false);
-    if (r.open) window.open(r.open, "_blank", "noopener");
-  };
-  const notesBox = h("div");
-  const drawNotes = (nd) => {
-    notesBox.textContent = "";
-    notesBox.append(notesCard(nd, async (patch) => { Object.assign(S.live, patch); drawNotes(await view("live", { match: S.live.match })); }));
-  };
-  drawNotes(d);
-  return [
-    h("p", { class: "muted", text: "Find a meet stream and record observations against the exact match. Notes are saved in the session." }),
-    h("div", { class: "grid2" },
-      h("div", null, card("Meet video", player,
-        h("div", { class: "row" }, field("Paste a YouTube stream or video URL", url, "wide")),
-        h("div", { class: "row" },
-          btn("Use this stream", async () => { const r = await runAction("stream", { url: url.value }); if (r.ok) rerender(); }, "primary"),
-          btn("Open video", () => { const u = url.value || d.stream; if (u) window.open(u, "_blank", "noopener"); else toast("Search for a live meet or paste a YouTube URL first."); }),
-          d.stream ? btn("Clear", async () => { await runAction("stream", { url: "" }, false); rerender(); }, "small") : null),
-        h("div", { class: "row" }, field("Search YouTube for this meet", query, "wide")),
-        h("div", { class: "row" }, btn("Search live streams", () => yt(true)), btn("Search all videos", () => yt(false))),
-        h("p", { class: "note", text: "Pick the event stream on YouTube, copy its link, paste it above, and it plays here beside your notes." }))),
-      notesBox),
-  ];
-};
-
+// Standalone Live Scouting page and video search removed. Match notes remain in Notes and match details.
 
 async function imageAttachment(label = "Photo") {
   return new Promise((resolve) => {
