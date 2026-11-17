@@ -152,8 +152,7 @@ const PAGES = [
     ["alliances", "Alliances", "◇", "Alliance selection workspace"],
     ["winrate", "Win Rate Curve", "⌁", "Alliance win-rate modeling"],
     ["analysis", "Analysis", "◉", "Prediction quality and insights"]]],
-  ["INSIGHTS", [["charts", "Charts", "▥", "Performance visualizations"],
-    ["live", "Live Scouting", "●", "Live match observation workspace"]]],
+  ["INSIGHTS", [["charts", "Charts", "▥", "Performance visualizations"]]],
   ["TOOLS", [["settings", "Settings", "\u2699\uFE0E", "Preferences and data controls"]]],
 ];
 const PAGE = {};
