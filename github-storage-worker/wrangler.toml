@@ -2,6 +2,9 @@ name = "autoscout-github-team-storage"
 main = "index.js"
 compatibility_date = "2026-11-16"
 
+[observability]
+enabled = true
+
 [vars]
 ALLOWED_ORIGIN = "https://gmkovalik.github.io"
 DATA_REPO = "gmkovalik/AutoScout-Data"
