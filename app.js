@@ -1538,21 +1538,16 @@ function notesCard(d, update) {
 // ---- Settings --------------------------------------------------------------
 function teamStorageSettingsCard() {
   const storage = window.AutoScoutTeamStorage;
-  const endpoint = h("input", { type:"url", placeholder:"https://your-worker.workers.dev", value:localStorage.getItem("autoscout_team_storage_url") || "" });
   const team = h("input", { type:"number", min:1, placeholder:"Team number" });
   const password = h("input", { type:"password", placeholder:"Shared team password", autocomplete:"current-password" });
   const registrationKey = h("input", { type:"password", placeholder:"Setup code (only when creating account)" });
   const status = h("p", { class:"muted small", text: storage && storage.signedIn() ? "Signed in to Team " + storage.currentTeam() : "Not signed in. Local storage continues to work." });
-  const connect = btn("Save server address", () => {
-    if (!storage || !storage.configure(endpoint.value)) { toast("Enter the Worker URL first.", true); return; }
-    toast("Team storage server address saved.");
-  }, "small");
   const login = btn("Sign in", async () => {
-    try { storage.configure(endpoint.value); await storage.login(team.value,password.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Signed in to team storage."); await rerender(); }
+    try { await storage.login(team.value,password.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Signed in to team storage."); await rerender(); }
     catch(e){toast(e.message,true);}
   }, "primary");
   const register = btn("Create team account", async () => {
-    try { storage.configure(endpoint.value); await storage.register(team.value,password.value,registrationKey.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Team account created."); await rerender(); }
+    try { await storage.register(team.value,password.value,registrationKey.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Team account created."); await rerender(); }
     catch(e){toast(e.message,true);}
   });
   const signout = btn("Sign out", () => { storage.signOut(); status.textContent="Signed out. Local storage remains available."; toast("Signed out."); rerender(); }, "small");
@@ -1590,8 +1585,7 @@ function teamStorageSettingsCard() {
     } catch(e) { toast(e.message,true); }
   }, "small");
   return card("Local and team storage",
-    h("p",{class:"muted small",text:"Local mode remains available without an account. Team mode shares notes and photos through the configured public GitHub data repository. Anything uploaded to that public repository is visible to everyone."}),
-    field("Storage Worker URL",endpoint),connect,
+    h("p",{class:"muted small",text:"Local mode works without an account. Sign in to your team account to share notes, photos and sessions. Team data is stored in a public GitHub repository and is visible to everyone."}),
     h("div",{class:"form"},field("Team number",team),field("Team password",password),field("Team setup code",registrationKey)),
     h("div",{class:"row"},login,register,signout,sync,saveCloudSession,openCloudSessions),status,
     h("p",{class:"note",text:"Creating accounts requires the registration code configured by the AutoScout administrator. Use a strong shared password. Never reuse a personal password."}));
