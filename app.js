@@ -1108,6 +1108,7 @@ function noteCountsByTeam(index) {
   };
   for (const n of (index && index.team_notes) || []) add(n.team, "t" + teamNoteKey(n.team, n));
   for (const n of (index && index.match_notes) || []) add(n.team, "m" + matchNoteKey(n.match, n));
+  for (const t of Object.keys((index && index.sheet_notes) || {})) add(t, "s");     // the note on the team sheet
   if (cloudReady()) {
     for (const [t, rows] of Object.entries(CLOUD.teams)) for (const n of rows || []) add(t, "t" + teamNoteKey(t, n));
     for (const [m, rows] of Object.entries(CLOUD.matches)) for (const n of rows || []) if (forThisEvent(n)) add(n.team, "m" + matchNoteKey(m, n));
@@ -1158,7 +1159,13 @@ function notePhoto(n, className = "note-photo") {
   if (photoObserver) photoObserver.observe(box); else box._load();
   return box;
 }
+/** The note typed on each team's sheet, shown with the team notes (edited on the sheet itself). */
+function sheetNoteEntries(sheet) {
+  return Object.entries(sheet || {}).map(([team, text]) => ({ team: String(team), time: "", text, photo: "", sheet: true }))
+    .sort((a, b) => Number(a.team) - Number(b.team));
+}
 function noteBadge(n) {
+  if (n.sheet) return h("span", { class: "note-badge plain", text: "Team sheet", title: "The note on this team's sheet (Teams list). Saved on this device." });
   if (!teamOn()) return null;
   if (n.shared && !n.local) return h("span", { class: "note-badge shared", text: "Team", title: "Shared by your team" });
   if (n.shared) return h("span", { class: "note-badge shared", text: "Shared", title: "Saved here and shared with your team" });
@@ -1196,10 +1203,10 @@ RENDER.notes = async () => {
 };
 
 function renderNotesWorkspace(d) {
-  const teamNotes = mergedTeamNotes(d.team_notes);
+  const teamNotes = [...sheetNoteEntries(d.sheet_notes), ...mergedTeamNotes(d.team_notes)];
   const matchNotes = new Map((d.matches || []).map((m) => [m.label, mergedMatchNotes(m.label, m.notes)]));
   const unshared = !teamOn() || !cloudReady() ? 0 :
-    teamNotes.filter((n) => !n.shared).length + [...matchNotes.values()].flat().filter((n) => !n.shared).length;
+    teamNotes.filter((n) => !n.shared && !n.sheet).length + [...matchNotes.values()].flat().filter((n) => !n.shared).length;
   const tabs = h("div", { class: "notes-main-tabs", role: "tablist" },
     btn("Match Notes", () => { S.notesTab = "matches"; rerender(); }, S.notesTab === "matches" ? "primary" : ""),
     btn(`Team Notes${teamNotes.length ? ` (${teamNotes.length})` : ""}`, () => { S.notesTab = "teams"; rerender(); }, S.notesTab === "teams" ? "primary" : ""));
@@ -1253,9 +1260,10 @@ function renderTeamNotes(d, notes) {
         h("div", { class: "match-note-meta" },
           S.notesTeam ? h("strong", { text: "Team " + n.team }) :
             h("button", { class: "linkbtn strong", type: "button", title: "Show only this team", onclick: () => { S.notesTeam = n.team; rerender(); } }, "Team " + n.team),
-          h("span", { class: "note-time", text: n.time || "Time not recorded" }),
+          n.sheet ? null : h("span", { class: "note-time", text: n.time || "Time not recorded" }),
           noteBadge(n),
-          btn("Delete", () => deleteNote("team", n.team, n, rerender), "small danger")),
+          n.sheet ? btn("Edit on team sheet", () => go("teams", { team: n.team }), "small") :
+            btn("Delete", () => deleteNote("team", n.team, n, rerender), "small danger")),
         n.text ? h("p", { class: "match-note-text", text: n.text }) : null,
         notePhoto(n)));
     }
@@ -1890,12 +1898,15 @@ function openTeamSheet(d) {
     const tdc = select(S.boot.tdc_issues.map((x) => [x, x || "- none -"]), e.tdc, () => apply());
     const delta = h("input", { type: "number", value: e.delta, step: "any", inputmode: "decimal" });
     const focus = select(S.boot.focus_modes, e.focus, () => apply());
-    const note = textInput(e.note, { placeholder: "Pit notes, robot issues…" });
+    const note = textInput(e.note, { placeholder: "Short pit note, robot issues…" });
     delta.addEventListener("change", () => apply());
+    note.addEventListener("change", () => apply());          // save the sheet note when you leave the box
     async function apply() {
       await runAction("team_edit", { team: e.team, tdc: tdc.value, delta: delta.value, focus: focus.value, note: note.value }, false);
       const nd = await view("teams", { ...S.panel, team: e.team });
       refreshPanel(nd.panel);
+      const notesBox = document.querySelector(".sheet-notes");
+      if (notesBox && notesBox._draw) notesBox._draw();
       toast("Saved. CAP and every prediction updated.");
     }
     const panelBox = h("div");
@@ -1907,8 +1918,9 @@ function openTeamSheet(d) {
       h("button", { class: "btn small close", onclick: close, "aria-label": "Close" }, "✕"),
       h("h2", { text: e.title }),
       h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (Technical Issues + Team Focus)" }),
-        h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Note", note, "wide")),
+        h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Sheet note", note, "wide")),
         h("div", { class: "row" }, btn("Apply", apply, "primary"))),
+      sheetNotesCard(e.team),
       leagueInfoCard(d.league_info, e.team, async (event) => {
         const loaded = await loadEvent({ season: event.season || d.league_info.season, event: event.code,
           team: String(e.team), extra: "", offline: false, history: true, schedule: "" }, { rerenderAfter: false });
@@ -2293,6 +2305,44 @@ function notesCard(d, update) {
       }, "primary"),
       h("span", { class: "spacer" }), btn("Save session", saveSession)),
     list);
+}
+
+/** Team sheet: this team's scouting notes (the same notes as Notes > Team Notes), with an add box. */
+function sheetNotesCard(team) {
+  team = String(team);
+  const box = h("section", { class: "card sheet-notes" }, h("h3", { text: `Scouting notes for Team ${team}` }), h("p", { class: "muted small", text: "Loading notes…" }));
+  const draw = async () => {
+    const [d] = await Promise.all([view("team_notes", { team }), fetchCloudNotes()]);
+    const notes = [...sheetNoteEntries(d.sheet_note ? { [team]: d.sheet_note } : {}),
+      ...mergedTeamNotes(d.notes).filter((n) => n.team === team)];
+    const text = h("textarea", { rows: 3, placeholder: "What you saw: robot capabilities, strategy, reliability, driver skill…" });
+    let photo = "";
+    const photoStatus = h("span", { class: "muted small", text: "No photo attached" });
+    const save = btn(teamOn() ? "Save and share" : "Save note", async () => {
+      save.disabled = true;
+      const r = await addTeamNote({ team, text: text.value, photo });
+      save.disabled = false;
+      if (r.ok) draw();
+    }, "primary");
+    box.replaceChildren(
+      h("h3", { text: `Scouting notes for Team ${team}` }),
+      h("p", { class: "muted small", text: "The same notes as Notes ▸ Team Notes" + (teamOn() ? `, shared with ${accountName()}.` : ". Sign in to share them with your team.") }),
+      field("New note", text),
+      h("div", { class: "row team-note-actions" },
+        btn("Add photo", async () => { const p = await imageAttachment(); if (p) { photo = p; photoStatus.textContent = "Photo attached"; } }, "small"),
+        photoStatus, h("span", { class: "spacer" }), save),
+      notes.length ? h("div", { class: "team-note-list" }, notes.map((n) => h("article", { class: "team-note-entry" },
+        h("div", { class: "match-note-meta" },
+          n.sheet ? null : h("span", { class: "note-time", text: n.time || "Time not recorded" }),
+          noteBadge(n),
+          n.sheet ? null : btn("Delete", () => deleteNote("team", team, n, draw), "small danger")),
+        n.text ? h("p", { class: "match-note-text", text: n.text }) : null,
+        notePhoto(n)))) :
+        h("p", { class: "muted small", text: "No notes on this team yet." }));
+  };
+  box._draw = () => draw().catch(() => {});
+  draw().catch((err) => box.replaceChildren(h("h3", { text: `Scouting notes for Team ${team}` }), h("p", { class: "status err", text: err.message })));
+  return box;
 }
 
 // ---- Settings --------------------------------------------------------------
