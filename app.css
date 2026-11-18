@@ -899,3 +899,5 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
 .team-lookup .field.wide { flex: none; width: auto; }
 .team-lookup + .status:empty { display: none; }
 @media (max-width: 600px) { .team-lookup { grid-template-columns: minmax(0, 1fr) auto; } .team-lookup > .btn.small { grid-column: 1 / -1; justify-self: start; } }
+
+.navlink .ic-svg { width: 1em; height: 1em; flex: none; }
