@@ -970,20 +970,13 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
 .theme-choice { margin: 4px 0 6px; }
 
 /* ---------- Schedule Data: prediction accuracy + each rating's call ---------- */
-.acc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.acc-big { font-size: 30px; font-weight: 900; color: var(--brand-text); }
-.acc-rows { display: grid; gap: 6px; max-width: 720px; }
-.acc-row { display: grid; grid-template-columns: 64px minmax(80px, 1fr) 58px 64px auto auto; gap: 10px; align-items: center; font-size: 14px; }
-.acc-row.current .acc-name { color: var(--brand-text); }
-.acc-name { font-weight: 700; }
-.acc-bar { height: 10px; border-radius: 5px; background: var(--row-alt); border: 1px solid var(--border); overflow: hidden; }
-.acc-bar > div { height: 100%; background: #9aa3b2; }
-.acc-row.current .acc-bar > div { background: var(--brand); }
-.acc-pct { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-@media (max-width: 600px) {
-  .acc-row { grid-template-columns: 52px minmax(60px, 1fr) 52px auto; }
-  .acc-row .acc-count, .acc-row .note-badge.plain { display: none; }
-}
+.matches-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 10px; }
+.matches-head h3 { margin: 0; font-size: 12px; letter-spacing: .8px; color: var(--brand-text); font-weight: 700; text-transform: uppercase; }
+.acc-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12.5px; }
+.acc-lab { color: var(--muted); }
+.acc-chip { background: var(--row-alt); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; cursor: help; }
+.acc-chip.current { background: var(--brand-tint); border-color: var(--brand-ink); }
+.acc-chip.hind { border-style: dashed; }
 .schedule-matches table.data tbody tr td.rating-call { font-weight: 700; }
 .schedule-matches table.data tbody tr td.rating-call.rc-red { color: #b42332 !important; }
 .schedule-matches table.data tbody tr td.rating-call.rc-blue { color: #245bb5 !important; }
