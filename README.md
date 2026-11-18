@@ -48,6 +48,7 @@ Network: the first visit downloads the engine (about 7 MB) from jsDelivr. After 
 ## Differences from the desktop app
 
 - **Live Scouting** plays the YouTube stream inside the page, beside the notes. The desktop has to open a separate browser.
+- **Dark mode**: Settings > Appearance offers Light, Dark or Match this device, remembered per device.
 - **Changes save themselves** (notes, scores, overrides, settings) to the browser. "Save session" is still there.
 - **Competition Day's refresh button** fetches new match results only (a few seconds). The desktop's "Refresh event data" reloads everything, which takes minutes at a big event. A full reload is still on Setup.
 - **Save image** on a chart writes a PNG instead of PostScript.

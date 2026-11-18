@@ -9,7 +9,16 @@
 
 <meta name="description" content="FTC AutoScout: match predictions, scouting notes and alliance selection for FIRST Tech Challenge. Runs in your browser.">
 <meta name="theme-color" content="#5d081f">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
+<!-- Apply the saved theme before the page is drawn, so dark mode doesn't flash white. -->
+<script>
+  (function () {
+    var t = "light";
+    try { t = localStorage.getItem("autoscout.theme") || "light"; } catch (e) {}
+    if (t === "system") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

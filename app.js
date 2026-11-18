@@ -72,6 +72,26 @@ function hero(kicker, title, sub) {
 }
 function isPhone() { return window.matchMedia("(max-width: 860px)").matches; }
 
+// ---- Appearance: "light", "dark" or "system" (follow the device), remembered on this device.
+const THEME_KEY = "autoscout.theme";
+function themeChoice() { try { return localStorage.getItem(THEME_KEY) || "light"; } catch (_) { return "light"; } }
+const darkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+function applyTheme() {
+  const c = themeChoice();
+  const dark = c === "dark" || (c === "system" && !!(darkQuery && darkQuery.matches));
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+}
+function isDark() { return document.documentElement.getAttribute("data-theme") === "dark"; }
+function setTheme(choice) {
+  try { localStorage.setItem(THEME_KEY, choice); } catch (_) { /* private mode: this visit only */ }
+  applyTheme();
+  if (typeof S !== "undefined" && S.boot) rerender();     // redraw charts in the new colours
+}
+if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener("change", () => {
+  if (themeChoice() === "system") { applyTheme(); if (typeof S !== "undefined" && S.boot) rerender(); }
+});
+applyTheme();
+
 let toastTimer = null;
 function toast(msg, err = false) {
   if (!msg) return;
@@ -345,7 +365,9 @@ function fixSticky(table, n) {
 // ---------------------------------------------------------------------------
 // Charts (a port of the desktop ChartCanvas: same axes, ticks, colours and rules)
 // ---------------------------------------------------------------------------
-const C = { padL: 62, padR: 18, padT: 34, padB: 48, grid: "#e6e9f0", axis: "#8a93a6", text: "#182236", muted: "#6b7280", brand: "#5d081f" };
+const C = { padL: 62, padR: 18, padT: 34, padB: 48, grid: "#e6e9f0", axis: "#8a93a6", text: "#182236", muted: "#6b7280", brand: "#5d081f", bg: "#fff" };
+const CHART_LIGHT = { grid: "#e6e9f0", axis: "#8a93a6", text: "#182236", muted: "#6b7280", bg: "#fff", brand: "#5d081f" };
+const CHART_DARK = { grid: "#2b303a", axis: "#6b7383", text: "#e5e7ec", muted: "#9ca3b0", bg: "#1a1d24", brand: "#f19bb0" };
 const measureCtx = document.createElement("canvas").getContext("2d");
 function textW(s, px = 11, weight = "400") { measureCtx.font = `${weight} ${px}px Roboto, Arial, sans-serif`; return measureCtx.measureText(s).width; }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
@@ -371,6 +393,13 @@ function lerpColor(a, b, t) {
   const ch = (i) => Math.round(p(a, i) + (p(b, i) - p(a, i)) * t).toString(16).padStart(2, "0");
   return "#" + ch(0) + ch(1) + ch(2);
 }
+function chartInk(col) {
+  const m = /^#([0-9a-f]{6})$/i.exec(String(col || ""));
+  if (!m) return col;
+  const n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum < 0.32 ? lerpColor(col, "#ffffff", 0.5) : col;
+}
 function wrapText(s, maxW, px, weight) {
   const words = String(s).split(" ");
   const lines = [];
@@ -386,7 +415,9 @@ function wrapText(s, maxW, px, weight) {
 function buildChart(c, w, H) {
   const out = [];
   const screen = [];
-  const series = (c && c.series) || [];
+  // In dark mode, very dark series colours (like the AutoScout maroon) are lightened so they show up.
+  const series = ((c && c.series) || []).map((s) => isDark()
+    ? { ...s, color: chartInk(s.color), points: (s.points || []).map((p) => (p.color ? { ...p, color: chartInk(p.color) } : p)) } : s);
   const fin = (v) => typeof v === "number" && Number.isFinite(v);
   const pts = [];
   for (const s of series) for (const p of s.points) if (fin(p.x) && fin(p.y)) pts.push([p, s]);
@@ -415,7 +446,8 @@ function buildChart(c, w, H) {
   }
   const titleH = Math.max(0, titleLines.length - 1) * 16;
   const x0 = C.padL, y0 = C.padT + titleH + 14 * legendRows.length, x1 = w - C.padR, y1 = H - padB;
-  out.push(`<rect width="${w}" height="${H}" fill="#fff"/>`);
+  Object.assign(C, isDark() ? CHART_DARK : CHART_LIGHT);
+  out.push(`<rect width="${w}" height="${H}" fill="${C.bg}"/>`);
   titleLines.forEach((line, i) => out.push(`<text x="${w / 2}" y="${18 + i * 16}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${C.brand}">${esc(line)}</text>`));
   let ly = 28 + titleH;
   for (const row of legendRows) {
@@ -483,8 +515,8 @@ function buildChart(c, w, H) {
     for (const p of sp) {
       const cx = sx(p.x), cy = sy(p.y), zn = zNorm(p.z);
       const r = zn == null ? 4.5 : 4 + 9 * zn;
-      const color = p.color || (zn == null ? s.color : lerpColor("#dbdce0", "#5d081f", zn));
-      out.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" stroke="#fff" stroke-width="1"/>`);
+      const color = p.color || (zn == null ? s.color : (isDark() ? lerpColor("#3a404c", "#f19bb0", zn) : lerpColor("#dbdce0", "#5d081f", zn)));
+      out.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" stroke="${C.bg}" stroke-width="1"/>`);
       if (s.labels && p.label) out.push(`<text x="${cx + r + 2}" y="${cy - r - 1}" font-size="10" fill="${C.text}">${esc(p.label)}</text>`);
       screen.push([cx, cy, p]);
     }
@@ -505,7 +537,7 @@ function chartView(c, opts = {}) {
     size = [w, H];
     const b = buildChart(c, w, H);
     screen = b.screen;
-    box.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" font-family="Roboto, Arial, sans-serif" role="img" aria-label="${esc((c && c.title) || "chart")}">${b.svg}<circle class="ring" r="8" fill="none" stroke="#5d081f" stroke-width="2" visibility="hidden"/></svg>`;
+    box.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" font-family="Roboto, Arial, sans-serif" role="img" aria-label="${esc((c && c.title) || "chart")}">${b.svg}<circle class="ring" r="8" fill="none" stroke="${isDark() ? "#f19bb0" : "#5d081f"}" stroke-width="2" visibility="hidden"/></svg>`;
     box.append(tip);
   }
   function nearest(ev) {
@@ -2443,7 +2475,13 @@ RENDER.settings = async () => {
   const num = (v, key, w = "90px") => h("input", { type: "number", step: "any", value: v, style: { width: w }, onchange: (e) => { st[key] = e.target.value; } });
   const k0 = num(d.k0, "k0"), kmin = num(d.kmin, "kmin"), mpt = num(d.mpt, "mpt"), margin = num(d.margin, "margin");
   for (const el of [k0, kmin]) el.addEventListener("change", () => apply({}));
+  const choice = themeChoice();
   return [
+    card("Appearance",
+      h("div", { class: "seg theme-choice", role: "radiogroup", "aria-label": "Theme" },
+        [["light", "Light"], ["dark", "Dark"], ["system", "Match this device"]].map(([k, lab]) =>
+          h("button", { type: "button", class: choice === k ? "on" : "", role: "radio", "aria-checked": choice === k ? "true" : "false", onclick: () => setTheme(k) }, lab))),
+      h("p", { class: "note", text: "Dark mode is easier on the eyes in a dark venue and saves battery on many phones. Saved on this device." })),
     card("Predictions are based on",
       h("div", { class: "row" }, h("div", { class: "seg", role: "radiogroup" }, [["CAP", "CAP (AutoScout's own rating)"], ["OPR", "OPR (non-penalty)"], ["EPA", "EPA (learns match by match)"]].map(([k, lab]) =>
         h("button", { type: "button", class: d.rating === k ? "on" : "", role: "radio", "aria-checked": d.rating === k ? "true" : "false", onclick: () => apply({ rating: k }) }, lab))),
