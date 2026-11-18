@@ -87,6 +87,7 @@ function accountId(value) { return String(value || "").trim().toLowerCase(); }
 function validTeam(team) { return /^(\d{1,8}|[a-z][a-z0-9_-]{2,29})$/.test(team); }
 function validDataPath(path) {
   return path === "match-notes.json" || path === "team-notes.json" ||
+    path === "chat.json" || path === "picklist.json" ||
     /^sessions\/[A-Za-z0-9_-]{1,80}\.json$/.test(path) ||
     /^photos\/[A-Za-z0-9_-]{1,80}\.json$/.test(path);
 }

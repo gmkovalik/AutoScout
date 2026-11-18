@@ -140,7 +140,7 @@ const S = {
   boot: null, head: null, page: "overview", params: {}, sort: {}, loading: false,
   comp: {}, panel: {}, all: {}, pairs: {}, chartsPage: "team", live: {}, research: { results: [], profile: null, season: "", query: "" },
   eventSearch: { query: "", results: [], status: "" },
-  notesTab: "matches", notesTeam: "", notesQuery: "", teamNoteDraft: null, engineStatus: "Starting…",
+  notesTab: "matches", notesTeam: "", teamTab: "pick", teamsNoteFilter: "all", pickSort: "order", pickDesc: null, chatDraft: "", notesQuery: "", teamNoteDraft: null, engineStatus: "Starting…",
   auto: { on: false, minutes: 2, timer: null, initialized: false },
 };
 
@@ -150,6 +150,7 @@ const PAGES = [
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Your event team database"],
     ["notes", "Notes", "✎", "Match notes and team notes"],
+    ["teampage", "Team Page", "◎", "Your account's pick list and team chat"],
     ["research", "Team Research", "⌕", "Public FTC team intelligence"],
     ["myteam", "My Team", "\u2605\uFE0E", "Your team's performance"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
@@ -260,7 +261,8 @@ function sortKey(v) {
 function cmpKeys(a, b) { return a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0); }
 
 function dataTable(t, opts = {}) {
-  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet.", matchStyle = false, mineTeam = null } = opts;
+  const { id = "t", onRow = null, sticky = 1, wrap = [], short = false, flash = null, empty = "Nothing to show yet.", matchStyle = false, mineTeam = null,
+    cellClass = null } = opts;
   const box = h("div", { class: "tablewrap" + (short ? " short" : "") });
   if (!t || !t.rows || !t.rows.length) {
     box.append(h("div", { class: "empty", text: empty }));
@@ -297,6 +299,7 @@ function dataTable(t, opts = {}) {
           if (mineTeam != null && ["r1", "r2", "b1", "b2"].includes(c.key) &&
               String(v).trim() === String(mineTeam).trim()) classes.push("selected-team-number");
         }
+        if (cellClass) classes.push(cellClass(c.key, v, iid) || "");
         tr.append(h("td", { class: classes.join(" ") }, displayValue(v)));
       });
       tbody.append(tr);
@@ -856,11 +859,30 @@ async function saveSession() {
 // ---- Teams (+ the team sheet) ---------------------------------------------
 RENDER.teams = async (params) => {
   const team = params.team ? Number(params.team) : 0;
-  const d = await view("teams", { ...S.panel, team });
+  const [d] = await Promise.all([view("teams", { ...S.panel, team }), fetchCloudNotes()]);
+  // Mark which teams already have scouting notes (this device's and, when signed in, the shared ones).
+  const counts = noteCountsByTeam(d.notes);
+  const table = withNotesColumn(d.table, counts);
+  const box = h("div");
+  const withNotes = table.rows.filter((r) => counts[String(r[0])]).length;
+  const filters = [["all", `All (${table.rows.length})`], ["yes", `With notes (${withNotes})`], ["no", `No notes yet (${table.rows.length - withNotes})`]];
+  const seg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Show teams" });
+  const draw = () => {
+    const f = S.teamsNoteFilter || "all";
+    for (const b of seg.children) { const on = b.dataset.f === f; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false"); }
+    const rows = table.rows.filter((r) => f === "all" || (f === "yes") === !!counts[String(r[0])]);
+    box.replaceChildren(dataTable({ ...table, rows }, { id: "teams", sticky: 2, flash: team || null, onRow: (iid) => go("teams", { team: iid }),
+      cellClass: (key, v) => key === "notes" ? (v ? "notes-yes" : "notes-no") : "",
+      empty: table.rows.length ? "No teams match this filter." : "No teams loaded. Load a meet on the Setup tab first." }));
+  };
+  for (const [f, label] of filters) seg.append(h("button", { type: "button", role: "radio", "data-f": f, onclick: () => { S.teamsNoteFilter = f; draw(); } }, label));
+  draw();
   const nodes = [
     h("p", { class: "muted", text: "Select a team to view its charts, league standings, and every meet it attended this season." }),
-    dataTable(d.table, { id: "teams", sticky: 2, flash: team || null, onRow: (iid) => go("teams", { team: iid }),
-      empty: "No teams loaded. Load a meet on the Setup tab first." }),
+    table.rows.length ? h("div", { class: "row teams-filter" }, seg,
+      h("span", { class: "muted small" }, h("span", { class: "notes-yes legend" }, "3"), " = scouting notes on this team",
+        teamOn() ? ` (this device + ${accountName()})` : "")) : null,
+    box,
   ];
   if (team && d.editor) afterRender.push(() => openTeamSheet(d));
   else if (team) afterRender.push(() => toast(`Team ${team} is not at this event.`, true));
@@ -1074,6 +1096,36 @@ function mergedMatchNotes(label, local) {
   return [...out.values()].sort((a, b) => String(a.time).localeCompare(String(b.time)));
 }
 
+/** Number of scouting notes about each team: team notes plus match notes that name the team,
+    from this device and (when signed in) the shared notes, each note counted once. */
+function noteCountsByTeam(index) {
+  const keys = new Map();
+  const add = (team, key) => {
+    team = String(team || "");
+    if (!/^\d+$/.test(team)) return;
+    if (!keys.has(team)) keys.set(team, new Set());
+    keys.get(team).add(key);
+  };
+  for (const n of (index && index.team_notes) || []) add(n.team, "t" + teamNoteKey(n.team, n));
+  for (const n of (index && index.match_notes) || []) add(n.team, "m" + matchNoteKey(n.match, n));
+  if (cloudReady()) {
+    for (const [t, rows] of Object.entries(CLOUD.teams)) for (const n of rows || []) add(t, "t" + teamNoteKey(t, n));
+    for (const [m, rows] of Object.entries(CLOUD.matches)) for (const n of rows || []) if (forThisEvent(n)) add(n.team, "m" + matchNoteKey(m, n));
+  }
+  return Object.fromEntries([...keys].map(([t, set]) => [t, set.size]));
+}
+/** A copy of the engine's teams table with a "Notes" column after the team name. */
+function withNotesColumn(t, counts) {
+  if (!t || !t.columns) return { columns: [], rows: [] };
+  const at = Math.max(t.columns.findIndex((c) => c.key === "name"), t.columns.findIndex((c) => c.key === "team")) + 1;
+  const columns = [...t.columns.slice(0, at), { key: "notes", label: "Notes", align: "center" }, ...t.columns.slice(at)];
+  const rows = (t.rows || []).map(([iid, vals, tags]) => {
+    const n = counts[String(iid)] || 0;
+    return [iid, [...vals.slice(0, at), n ? String(n) : "", ...vals.slice(at)], [...(tags || []), n ? "noted" : "unnoted"]];
+  });
+  return { columns, rows };
+}
+
 // Shared photos load only when they scroll into view, a few at a time.
 let photoSlots = 0;
 const photoWaiting = [];
@@ -1269,6 +1321,328 @@ function renderNotesTimeline(d, merged) {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Team Page (signed-in accounts): a shared pick list and a team chat
+//
+// Both live in the account's shared files: picklist.json (one list per event)
+// and chat.json (the latest 400 messages). Every change re-reads the file and
+// applies the change on top, so two people editing at once don't undo each other.
+// ---------------------------------------------------------------------------
+const CHAT_KEEP = 400;
+const CHAT_POLL_MS = 15000;
+const TP = { pick: null, pickAt: 0, pickTeam: null, chat: null, chatTeam: null, chatTimer: null };
+
+function readLocal(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (_) { return fallback; } }
+function writeLocal(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* private mode */ } }
+
+RENDER.teampage = async () => {
+  const tabs = h("div", { class: "notes-main-tabs", role: "tablist" },
+    btn("Pick List", () => { S.teamTab = "pick"; rerender(); }, S.teamTab !== "chat" ? "primary" : ""),
+    btn("Team Chat", () => { S.teamTab = "chat"; rerender(); }, S.teamTab === "chat" ? "primary" : ""));
+  if (!teamReady()) return [card("Team Page", h("p", { class: "muted", text: "Team accounts are not set up for this site." }))];
+  if (!teamOn()) {
+    return [card("Team Page",
+      h("p", { text: "Sign in to your team's account to use the shared pick list and the team chat." }),
+      h("p", { class: "muted small", text: "Everyone signed in to the same account sees the same list and messages, on any device." }),
+      h("div", { class: "row" }, btn("Sign in", () => openSignIn(), "primary"), btn("Create an account", () => openSignIn("create"))))];
+  }
+  return [tabs, ...(S.teamTab === "chat" ? await renderChat() : await renderPickList())];
+};
+
+// ---- Pick list -------------------------------------------------------------
+function pickKey() { return eventId() || "general"; }
+async function fetchPickList(force = false) {
+  const acct = Team.currentTeam();
+  if (TP.pickTeam !== acct) { TP.pick = null; TP.pickAt = 0; TP.pickTeam = acct; }
+  if (!force && TP.pick && Date.now() - TP.pickAt < 30000) return TP.pick;
+  const f = await Team.getFileOr("picklist.json", { schema: 1, lists: {} });
+  TP.pick = f.data && f.data.lists ? f.data : { schema: 1, lists: {} };
+  TP.pickAt = Date.now();
+  return TP.pick;
+}
+async function editPickList(change) {
+  const key = pickKey();
+  const saved = await Team.updateFile("picklist.json", { schema: 1, lists: {} }, (data) => {
+    data.schema = 1;
+    data.lists = data.lists || {};
+    const list = data.lists[key] = data.lists[key] || { teams: [] };
+    list.teams = list.teams || [];
+    if (change(list) === false) return false;
+    list.updated = new Date().toISOString();
+  });
+  TP.pick = saved; TP.pickAt = Date.now(); TP.pickTeam = Team.currentTeam();
+}
+
+/** The things the list can be ordered by: every number column of the engine's teams
+    table, the predicted alliance with us, and what we have noted. */
+function pickSortOptions(d) {
+  const opts = [["order", "Our order"]];
+  const pcols = (d.partners && d.partners.columns) || [];
+  const plabel = (k, fb) => (pcols.find((c) => c.key === k) || {}).label || fb;
+  if (d.my_team) {
+    opts.push(["p:total", `Predicted score with ${d.my_team} (${plabel("total", "Total")})`],
+      ["p:cow", `Chance of winning with ${d.my_team}`], ["p:rate", "Win rate together"],
+      ["p:strength", "Alliance strength together"], ["p:margin", "Margin together"]);
+  }
+  for (const c of ((d.teams && d.teams.columns) || [])) {
+    if (["team", "name"].includes(c.key)) continue;
+    opts.push(["t:" + c.key, c.key === "rank" ? "Rank (#)" : c.label]);
+  }
+  opts.push(["notes", "Scouting notes (most first)"], ["issue", "Technical issue (none first)"], ["team", "Team number"]);
+  return opts;
+}
+function num(v) {
+  const k = sortKey(v);
+  return k[0] === 0 ? k[1] : null;
+}
+
+async function renderPickList() {
+  const [d] = await Promise.all([view("pick"), fetchPickList().catch((e) => { TP.pickError = e.message; }), fetchCloudNotes()]);
+  const counts = noteCountsByTeam(d.notes);
+  const list = ((TP.pick && TP.pick.lists && TP.pick.lists[pickKey()]) || { teams: [] }).teams || [];
+  const tcols = (d.teams && d.teams.columns) || [];
+  const stats = new Map((d.teams && d.teams.rows || []).map(([iid, vals]) => [String(iid), Object.fromEntries(tcols.map((c, i) => [c.key, vals[i]]))]));
+  const pcols = (d.partners && d.partners.columns) || [];
+  const partner = new Map((d.partners && d.partners.rows || []).map(([iid, vals]) => [String(iid), Object.fromEntries(pcols.map((c, i) => [c.key, vals[i]]))]));
+  const plabel = (k, fb) => (pcols.find((c) => c.key === k) || {}).label || fb;
+  const basis = d.basis || "CAP";
+
+  // ---- order the rows
+  const sortBy = S.pickSort || "order";
+  const desc = S.pickDesc != null ? S.pickDesc : !["team", "issue", "t:rank"].includes(sortBy);
+  const value = (t) => {
+    if (sortBy === "notes") return counts[t] || 0;
+    if (sortBy === "team") return Number(t);
+    if (sortBy === "issue") { const x = String((stats.get(t) || {}).tdc || "").trim(); return x && x !== "-" ? 1 : 0; }
+    if (sortBy.startsWith("p:")) return num((partner.get(t) || {})[sortBy.slice(2)]);
+    if (sortBy.startsWith("t:")) return num((stats.get(t) || {})[sortBy.slice(2)]);
+    return null;
+  };
+  let rows = list.map((item, i) => ({ ...item, team: String(item.team), pos: i }));
+  if (sortBy !== "order") {
+    const ascending = !desc;
+    rows = rows.map((r) => ({ ...r, v: value(r.team) })).sort((a, b) =>
+      (a.v == null) - (b.v == null) || (a.v == null ? 0 : (ascending ? a.v - b.v : b.v - a.v)) || a.pos - b.pos);
+  }
+  // Outline the pick with the highest predicted score, when one stands out.
+  const totals = rows.map((r) => num((partner.get(r.team) || {}).total)).filter((v) => v != null);
+  const top = totals.length ? Math.max(...totals) : null;
+  const best = top != null && totals.filter((v) => v === top).length === 1 && totals.length > 1 ? top : null;
+
+  // ---- controls
+  const options = pickSortOptions(d);
+  // Each order starts the natural way round: most first, except rank, team number and issues.
+  const sortSel = select(options, sortBy, (v) => { S.pickSort = v; S.pickDesc = !["team", "issue", "t:rank"].includes(v); rerender(); });
+  const dirBtn = sortBy === "order" ? null : btn(desc ? "High → low" : "Low → high", () => { S.pickDesc = !desc; rerender(); }, "small");
+  const saveOrder = sortBy === "order" ? null : btn("Save as our order", async (e) => {
+    e.currentTarget.disabled = true;
+    const order = rows.map((r) => r.team);
+    try {
+      await editPickList((l) => { const by = new Map(l.teams.map((x) => [String(x.team), x])); l.teams = [...order.filter((t) => by.has(t)).map((t) => by.get(t)), ...l.teams.filter((x) => !order.includes(String(x.team)))]; });
+      S.pickSort = "order"; toast("Saved this order for everyone.");
+    } catch (err) { toast("Could not save the order: " + err.message, true); }
+    rerender();
+  }, "small primary");
+
+  const listed = new Set(list.map((x) => String(x.team)));
+  const eventTeams = (d.teams && d.teams.rows || []).map(([iid, vals]) => ({ team: String(iid), name: (stats.get(String(iid)) || {}).name || "" }));
+  const addInput = h("input", { type: "text", inputmode: "numeric", list: "pick-add-teams", placeholder: "Team number", autocomplete: "off" });
+  const addList = h("datalist", { id: "pick-add-teams" }, eventTeams.filter((t) => !listed.has(t.team)).map((t) => h("option", { value: t.team }, t.name)));
+  const add = async (teams) => {
+    teams = teams.map(String).filter((t) => /^\d+$/.test(t) && !listed.has(t));
+    if (!teams.length) { toast("Those teams are already on the list.", true); return; }
+    try {
+      await editPickList((l) => {
+        const have = new Set(l.teams.map((x) => String(x.team)));
+        const fresh = teams.filter((t) => !have.has(t));
+        if (!fresh.length) return false;
+        for (const t of fresh) l.teams.push({ team: t, note: "", by: chatName() || "", at: new Date().toISOString() });
+      });
+    } catch (err) { toast("Could not add: " + err.message, true); }
+    rerender();
+  };
+  const addBtn = btn("Add to list", () => add([addInput.value.trim()]), "primary");
+  addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") add([addInput.value.trim()]); });
+  const topBtn = d.my_team && partner.size ? btn("Add the top 8 partners", () => add([...partner.keys()].filter((t) => !listed.has(t)).slice(0, 8)), "small") : null;
+
+  // ---- one card per team
+  const move = async (team, delta) => {
+    try {
+      await editPickList((l) => {
+        const i = l.teams.findIndex((x) => String(x.team) === team), j = i + delta;
+        if (i < 0 || j < 0 || j >= l.teams.length) return false;
+        [l.teams[i], l.teams[j]] = [l.teams[j], l.teams[i]];
+      });
+    } catch (err) { toast("Could not move: " + err.message, true); }
+    rerender();
+  };
+  const remove = (team) => confirmDialog(`Remove ${team} from the list?`, `This removes it for everyone signed in as ${accountName()}. Its list note is removed too.`, "Remove", async () => {
+    try { await editPickList((l) => { const n = l.teams.length; l.teams = l.teams.filter((x) => String(x.team) !== team); return l.teams.length !== n; }); }
+    catch (err) { toast("Could not remove: " + err.message, true); }
+    rerender();
+  });
+  const cards = rows.map((r, i) => {
+    const st = stats.get(r.team) || {};
+    const p = partner.get(r.team) || {};
+    const total = num(p.total);
+    const isMe = String(d.my_team) === r.team;
+    const note = h("textarea", { rows: 2, class: "pick-note", value: r.note || "", placeholder: "Why we'd pick them, what to check, who to ask…" });
+    note.value = r.note || "";
+    const status = h("span", { class: "muted small" });
+    const saveNote = async () => {
+      const text = note.value.trim();
+      if (text === (r.note || "").trim()) return;
+      status.textContent = "Saving…";
+      try { await editPickList((l) => { const x = l.teams.find((y) => String(y.team) === r.team); if (!x) return false; x.note = text; x.noteBy = chatName() || ""; }); r.note = text; status.textContent = "Saved"; }
+      catch (err) { status.textContent = ""; toast("Could not save the note: " + err.message, true); }
+    };
+    note.addEventListener("blur", saveNote);
+    const issue = String(st.tdc || "").trim();
+    const statBits = [["Rank", st.rank], ["CAP", st.cap], ["OPR", st.opr], ["EPA", st.epa], ["Auto", st.auto], ["Teleop", st.teleop], ["Endgame", st.endgame]]
+      .filter(([, v]) => v !== undefined && v !== "");
+    return h("article", { class: "pick-card" + (best != null && total === best ? " best" : "") },
+      h("div", { class: "pick-rank", text: String(i + 1) }),
+      h("div", { class: "pick-main" },
+        h("div", { class: "pick-head" },
+          h("button", { class: "linkbtn strong", type: "button", title: "Open the team sheet", onclick: () => go("teams", { team: r.team }) }, r.team),
+          h("span", { class: "pick-name", text: st.name || (stats.has(r.team) || !d.loaded ? "" : "Not at this event") }),
+          counts[r.team] ? h("button", { class: "note-badge shared linkish", type: "button", title: "Open this team's notes",
+            onclick: () => { S.notesTab = "teams"; S.notesTeam = r.team; go("notes"); } }, `${counts[r.team]} note${counts[r.team] === 1 ? "" : "s"}`) :
+            h("span", { class: "note-badge local", text: "No notes yet" }),
+          issue && issue !== "-" ? h("span", { class: "note-badge issue", text: issue }) : null,
+          st.focus && st.focus !== "-" ? h("span", { class: "note-badge plain", text: "Focus: " + st.focus }) : null),
+        isMe ? h("p", { class: "muted small", text: "This is your team." }) :
+          total != null ? h("div", { class: "pick-predict" },
+            h("div", { class: "big" }, h("b", { text: p.total }), h("span", { text: ` predicted with ${d.my_team}` })),
+            h("span", { class: "muted small", text: [p.cow ? `Chance of winning ${p.cow}` : "", p.rate ? `wins ${p.rate}` : "", p.beats ? `beats ${p.beats}` : "", p.verdict || ""].filter(Boolean).join(" · ") })) :
+            h("p", { class: "muted small", text: d.my_team ? "No prediction: this team is not at the loaded event." : "Set your team number on Setup to see the predicted score with each pick." }),
+        h("div", { class: "pick-stats" }, statBits.map(([k, v]) => h("span", null, h("small", { text: k }), h("b", { text: displayValue(v) || "—" })))),
+        h("label", { class: "field" }, h("span", { text: "List note" }), note), status),
+      h("div", { class: "pick-actions" },
+        sortBy === "order" ? btn("↑", () => move(r.team, -1), "small") : null,
+        sortBy === "order" ? btn("↓", () => move(r.team, 1), "small") : null,
+        btn("Remove", () => remove(r.team), "small danger")));
+  });
+  cards.forEach((c, i) => { const up = c.querySelector(".pick-actions .btn"); if (up && i === 0 && sortBy === "order") up.disabled = true; });
+  if (cards.length && sortBy === "order") { const last = cards[cards.length - 1].querySelectorAll(".pick-actions .btn")[1]; if (last) last.disabled = true; }
+
+  const updated = TP.pick && TP.pick.lists && TP.pick.lists[pickKey()] && TP.pick.lists[pickKey()].updated;
+  return [
+    h("div", { class: "sync-bar" + (TP.pickError ? " err" : "") }, h("span", { class: "sync-dot" + (TP.pickError ? " bad" : ""), "aria-hidden": "true" }),
+      h("span", { class: "sync-text" }, h("b", { text: accountName() }),
+        TP.pickError ? ` · Couldn't load the shared list: ${TP.pickError}` :
+          ` · pick list for ${d.event || "no event loaded"}${updated ? " · changed " + new Date(updated).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}`),
+      btn("Refresh", async (e) => { e.currentTarget.disabled = true; TP.pickError = ""; await fetchPickList(true).catch((err) => { TP.pickError = err.message; }); rerender(); }, "small")),
+    card("Add teams",
+      d.loaded ? null : h("p", { class: "muted small", text: "Load your event on Setup to see stats and predicted scores. You can still build the list." }),
+      h("div", { class: "row pick-add" }, field("Team", h("span", { class: "combo" }, addInput, addList)), addBtn, topBtn),
+      d.bar ? h("p", { class: "note", text: d.bar }) : null),
+    card(`Pick list (${rows.length})`,
+      h("div", { class: "row pick-sort" }, field("Order by", sortSel, "wide"), dirBtn, saveOrder),
+      sortBy !== "order" ? h("p", { class: "note", text: "Sorted view. \"Save as our order\" makes it the list everyone sees in \"Our order\"." }) : null,
+      rows.length ? h("div", { class: "pick-list" }, cards) :
+        h("p", { class: "muted", text: "No teams on the list yet. Add teams above." }),
+      d.my_team ? h("p", { class: "note", text: `Predicted score = the two teams' ${basis} added together, the same prediction AutoScout uses for matches. Chance of winning is a share of predicted points, not a probability.` }) : null),
+  ];
+}
+
+// ---- Team chat -------------------------------------------------------------
+function chatName() { return readLocal("autoscout.chatName", ""); }
+function myMessageIds() { return new Set(readLocal("autoscout.chatMine", [])); }
+async function fetchChat() {
+  const acct = Team.currentTeam();
+  const f = await Team.getFileOr("chat.json", { schema: 1, messages: [] });
+  if (Team.currentTeam() !== acct) return TP.chat;
+  TP.chatTeam = acct;
+  TP.chat = (f.data && Array.isArray(f.data.messages)) ? f.data.messages : [];
+  TP.chatError = "";
+  return TP.chat;
+}
+function stopChatPolling() { if (TP.chatTimer) { clearInterval(TP.chatTimer); TP.chatTimer = null; } }
+
+async function renderChat() {
+  stopChatPolling();
+  if (TP.chatTeam !== Team.currentTeam()) TP.chat = null;
+  if (!TP.chat) await fetchChat().catch((e) => { TP.chatError = e.message; TP.chat = []; });
+  const box = h("div", { class: "chat-log", role: "log", "aria-live": "polite" });
+  const drawLog = () => {
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    const mine = myMessageIds();
+    box.textContent = "";
+    if (!TP.chat.length) box.append(h("p", { class: "muted small chat-empty", text: "No messages yet. Say hello to your team." }));
+    let lastDay = "";
+    for (const m of TP.chat) {
+      const when = new Date(m.at);
+      const day = when.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+      if (day !== lastDay) { box.append(h("div", { class: "chat-day", text: day })); lastDay = day; }
+      const own = mine.has(m.id);
+      box.append(h("div", { class: "chat-msg" + (own ? " own" : "") },
+        h("div", { class: "chat-meta" }, h("b", { text: m.name || "Someone" }),
+          h("span", { text: when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }),
+          own ? h("button", { class: "linkbtn small-link", type: "button", onclick: () => deleteMessage(m.id) }, "Delete") : null),
+        h("div", { class: "chat-text", text: m.text })));
+    }
+    if (atBottom || box.dataset.first !== "no") { box.scrollTop = box.scrollHeight; box.dataset.first = "no"; }
+  };
+  const status = h("span", { class: "muted small chat-status", text: TP.chatError ? "Couldn't load messages: " + TP.chatError : "" });
+  const name = h("input", { type: "text", value: chatName(), placeholder: "Your name", maxlength: 40, autocomplete: "nickname",
+    onchange: (e) => writeLocal("autoscout.chatName", e.target.value.trim()) });
+  const text = h("textarea", { rows: 2, placeholder: "Message your team…", maxlength: 2000 });
+  text.value = S.chatDraft || "";
+  text.addEventListener("input", () => { S.chatDraft = text.value; });
+  const send = btn("Send", async () => {
+    const who = name.value.trim();
+    const body = text.value.trim();
+    if (!who) { toast("Enter your name first, so your team knows who's talking.", true); name.focus(); return; }
+    if (!body) return;
+    writeLocal("autoscout.chatName", who);
+    const msg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), name: who, text: body };
+    send.disabled = true;
+    try {
+      const saved = await Team.updateFile("chat.json", { schema: 1, messages: [] }, (data) => {
+        data.schema = 1;
+        data.messages = (Array.isArray(data.messages) ? data.messages : []).concat(msg).slice(-CHAT_KEEP);
+      });
+      writeLocal("autoscout.chatMine", [...myMessageIds(), msg.id].slice(-CHAT_KEEP));
+      TP.chat = saved.messages;
+      text.value = ""; S.chatDraft = "";
+      box.dataset.first = "yes";
+      drawLog();
+      status.textContent = "";
+    } catch (e) { toast("Message not sent: " + e.message, true); }
+    send.disabled = false;
+    text.focus();
+  }, "primary");
+  text.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !isPhone()) { e.preventDefault(); send.click(); } });
+  async function deleteMessage(id) {
+    try {
+      const saved = await Team.updateFile("chat.json", { schema: 1, messages: [] }, (data) => {
+        const n = (data.messages || []).length;
+        data.messages = (data.messages || []).filter((m) => m.id !== id);
+        return data.messages.length !== n;
+      });
+      TP.chat = saved.messages || [];
+      drawLog();
+    } catch (e) { toast("Could not delete: " + e.message, true); }
+  }
+  // Check for new messages while the chat is on screen.
+  TP.chatTimer = setInterval(async () => {
+    if (S.page !== "teampage" || S.teamTab !== "chat" || !teamOn() || !box.isConnected) { stopChatPolling(); return; }
+    if (document.hidden) return;
+    const before = JSON.stringify(TP.chat.map((m) => m.id));
+    try { await fetchChat(); status.textContent = ""; } catch (e) { status.textContent = "Offline? " + e.message; return; }
+    if (JSON.stringify(TP.chat.map((m) => m.id)) !== before) drawLog();
+  }, CHAT_POLL_MS);
+  afterRender.push(drawLog);
+  return [
+    card(`${accountName()} chat`,
+      h("p", { class: "muted small", text: `Everyone signed in as ${accountName()} sees these messages. New messages appear every few seconds. Stored in the public data repository: don't share anything private.` }),
+      box,
+      h("div", { class: "chat-compose" }, field("Name", name, "chat-name"), h("label", { class: "field chat-input" }, h("span", { text: "Message" }), text), send),
+      status),
+  ];
+}
+
 // ---- Signing in ------------------------------------------------------------
 function openSignIn(mode = "signin") {
   if (!teamReady()) { toast("Team storage is not set up for this site.", true); return; }
@@ -1413,6 +1787,7 @@ function accountPanel(onDone) {
       h("div", null, h("b", { text: `Signed in as ${accountName()}` }),
         h("span", { class: "muted small", text: `Stays signed in on this device until ${until}.` }))),
     h("div", { class: "account-actions" },
+      btn("Team Page", () => { if (onDone) onDone(); go("teampage"); }, "small"),
       btn("Team notes", () => { if (onDone) onDone(); S.notesTab = "teams"; go("notes"); }, "small"),
       btn("Share this device's notes", busy(async () => {
         const n = await shareAllLocalNotes();
@@ -1441,7 +1816,8 @@ function updateAccountButton() {
 if (Team) Team.onChange(() => {
   resetCloud();
   updateAccountButton();
-  if (S.boot && (S.page === "notes" || S.page === "settings")) rerender();
+  TP.pick = null; TP.chat = null; stopChatPolling();
+  if (S.boot && ["notes", "settings", "teampage", "teams"].includes(S.page)) rerender();
 });
 
 function leagueInfoCard(info, teamNumber, onLoadEvent) {

@@ -645,10 +645,36 @@ def _team_phase_chart(team: int, season: int, event_code: str, scope: str) -> di
             "note": "Alliance phase totals for matches this team played, not individual robot contributions."}
 
 
+def _note_index() -> dict:
+    """Every scouting note in the session, without photos: enough to count notes per team."""
+    s = APP.session
+    team_notes = [{"team": str(team), "time": str(n.get("time") or ""), "text": str(n.get("text") or "")}
+                  for team, rows in s.team_notes.items() for n in rows]
+    match_notes = [{"match": str(label), "time": str(n.get("time") or ""), "team": str(n.get("team") or "General"),
+                    "phase": str(n.get("phase") or "Overall"), "text": str(n.get("text") or "")}
+                   for label, rows in s.live_notes.items() for n in rows]
+    return {"team_notes": team_notes, "match_notes": match_notes}
+
+
+def view_pick(o):
+    """Team Page > Pick List: the team stats table and, for my team, the engine's
+    prediction with every possible partner (the Alliances tab's partner table)."""
+    s = APP.session
+    teams = probe(A.TeamsTab, _editing=0, _panel_added=False)
+    teams.refresh()
+    alli = probe(A.AlliancesTab, only_var=Rec(False))
+    alli.refresh()
+    return {"loaded": bool(s.teams), "event": s.event_name, "my_team": s.my_team, "basis": s.settings.basis,
+            "teams": _table(teams.tree, A.TEAM_COLUMNS),
+            "partners": _table(alli.partner_tree, A.PARTNER_COLUMNS),
+            "partners_status": alli.status_var.get(), "bar": alli.bar_var.get(),
+            "notes": _note_index()}
+
+
 def view_teams(o):
     p = probe(A.TeamsTab, _editing=0, _panel_added=False)
     p.refresh()
-    out = {"table": _table(p.tree, A.TEAM_COLUMNS)}
+    out = {"table": _table(p.tree, A.TEAM_COLUMNS), "notes": _note_index()}
     team = int(o.get("team") or 0)
     if team and team in APP.session.teams:
         p._on_select(str(team))
@@ -888,7 +914,7 @@ def view_settings(o):
 
 
 VIEWS = {"overview": view_overview, "competition": view_competition, "setup": view_setup,
-         "teams": view_teams, "notes": view_notes, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
+         "teams": view_teams, "notes": view_notes, "pick": view_pick, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
          "standings": view_standings, "alliances": view_alliances, "winrate": view_winrate,
          "analysis": view_analysis, "charts": view_charts, "live": view_live,
          "research": view_research, "settings": view_settings}
