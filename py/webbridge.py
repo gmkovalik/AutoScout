@@ -426,8 +426,13 @@ def _head() -> dict:
 def view_overview(o):
     p = probe(A.HomeTab, home_metric_vars=recs(4))
     p.refresh()
+    s = APP.session
+    notes = sum(len(v) for v in s.live_notes.values()) + sum(len(v) for v in s.team_notes.values())
     return {"metrics": [{"label": lab, "value": v.get()} for lab, v in
-                        zip(["TEAMS TRACKED", "MATCHES LOADED", "MY TEAM", "SESSION STATUS"], p.home_metric_vars)]}
+                        zip(["TEAMS TRACKED", "MATCHES LOADED", "MY TEAM", "SESSION STATUS"], p.home_metric_vars)],
+            "progress": {"loaded": bool(s.loaded or s.matches), "event": s.event_name,
+                         "matches": len(s.matches), "played": sum(1 for m in s.matches if m.played),
+                         "notes": notes, "my_team": s.my_team}}
 
 
 def _predictions_by_rating() -> list:
