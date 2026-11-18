@@ -19,36 +19,18 @@
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 
+<!-- The engine (Pyodide) comes from jsDelivr: open that connection right away. -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<!-- Fonts load without blocking the first paint (system font until Roboto arrives). -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet"></noscript>
 
 <link rel="stylesheet" href="app.css">
 
-<!-- FTC AutoScout wordmark styling -->
-<style>
-.wordmark {
-  font-weight: 900;
-  font-size: 19px;
-  letter-spacing: .2px;
-  white-space: nowrap;
-  color: #ffffff;
-}
-
-.wordmark .ftc {
-  font-weight: 900;
-  color: #ffffff;
-  opacity: 1;
-}
-
-.wordmark .autoscout {
-  font-weight: 900;
-  font-style: italic;
-  color: #ffffff;
-  opacity: 1;
-}
-</style>
 
 </head>
 
@@ -91,6 +73,21 @@
   <div class="eventpill" id="eventPill" hidden></div>
 
   <div class="topactions">
+
+    <button
+      class="btn ghost light account-btn"
+      id="accountBtn"
+      type="button"
+      title="Team account"
+      hidden
+    >
+      <svg class="account-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 20c1.5-3.6 4.4-5 8-5s6.5 1.4 8 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="account-dot" aria-hidden="true"></span>
+      <span class="account-label hide-sm">Sign in</span>
+    </button>
 
     <button
       class="btn ghost light"
@@ -158,8 +155,8 @@
     url: "https://autoscout-github-team-storage.kovalikg29.workers.dev"
   };
 </script>
-<script src="github-storage-worker/client.js"></script>
-<script src="app.js"></script>
+<script src="github-storage-worker/client.js" defer></script>
+<script src="app.js" defer></script>
 
 </body>
 </html>

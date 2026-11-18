@@ -101,7 +101,11 @@ let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
   const m = e.data;
-  if (m.type === "status") { const s = $("#splashText"); if (s) s.textContent = m.text; return; }
+  if (m.type === "status") {
+    S.engineStatus = m.text;
+    for (const el of document.querySelectorAll("#splashText, .engine-status-text")) el.textContent = m.text;
+    return;
+  }
   if (m.type === "progress") { const p = pending.get(m.id); if (p && p.onProgress) p.onProgress(m.msg, m.frac); return; }
   const p = pending.get(m.id);
   if (!p) return;
@@ -136,7 +140,7 @@ const S = {
   boot: null, head: null, page: "overview", params: {}, sort: {}, loading: false,
   comp: {}, panel: {}, all: {}, pairs: {}, chartsPage: "team", live: {}, research: { results: [], profile: null, season: "", query: "" },
   eventSearch: { query: "", results: [], status: "" },
-  notesTab: "matches", notesTeam: "",
+  notesTab: "matches", notesTeam: "", notesQuery: "", teamNoteDraft: null, engineStatus: "Starting…",
   auto: { on: false, minutes: 2, timer: null, initialized: false },
 };
 
@@ -209,6 +213,8 @@ async function render() {
   S.params = params;
   markNav();
   const token = ++renderToken;
+  if (S.bootError) return;
+  if (!S.boot && page !== "overview") paintPage(page, [engineWaitCard()]);   // the engine is still starting
   let nodes;
   try {
     nodes = await RENDER[page](params);
@@ -216,18 +222,28 @@ async function render() {
     nodes = [card("Something went wrong", h("p", { class: "pre", text: e.message }),
       h("p", { class: "muted small", text: "If this keeps happening, reload the page. Your saved sessions are kept." }))];
   }
-  if (token !== renderToken) return;           // a newer render started meanwhile
-  const main = $("#main");
+  if (token !== renderToken || S.bootError) return;   // a newer render started meanwhile, or the engine failed
   const scroll = window.scrollY;
+  paintPage(page, nodes);
+  window.scrollTo(0, changed ? 0 : scroll);
+  for (const fn of afterRender.splice(0)) fn();
+}
+const afterRender = [];
+function paintPage(page, nodes) {
+  const main = $("#main");
   main.textContent = "";
   const info = PAGE[page];
   main.append(h("div", { class: "pagehead" }, h("h1", { text: info.title }), h("span", { class: "ctx", text: info.ctx })));
   if (S.loading) main.append(loadingBanner());
   main.append(...[].concat(nodes).filter(Boolean));
-  window.scrollTo(0, changed ? 0 : scroll);
-  for (const fn of afterRender.splice(0)) fn();
 }
-const afterRender = [];
+function engineWaitCard() {
+  return h("div", { class: "card engine-wait" },
+    h("div", { class: "row" }, h("b", { text: "Starting the AutoScout engine" }),
+      h("div", { class: "progress indeterminate" }, h("div")),
+      h("span", { class: "muted small engine-status-text", text: S.engineStatus })),
+    h("p", { class: "muted small", text: "The first visit downloads the engine (about 7 MB). After that it opens from this device, even offline." }));
+}
 
 async function rerender() { await render(); }
 
@@ -630,16 +646,7 @@ async function loadEvent(args, { rerenderAfter = true } = {}) {
 
 async function runAction(name, args, okToast = true) {
   try {
-    const storage = window.AutoScoutTeamStorage;
-    if (storage && storage.signedIn() && (name === "note_delete" || name === "team_note_delete")) {
-      await deleteSharedNote(name, args || {});
-      return {ok:true, message:"Deleted shared note."};
-    }
     const r = await act(name, args);
-    if (r.ok && storage && storage.signedIn() && ["note_add", "team_note_add"].includes(name)) {
-      try { await syncTeamNotesToCloud(); }
-      catch (e) { toast("Saved locally, but team sync failed: " + e.message, true); }
-    }
     if (r.message && (okToast || !r.ok)) toast(r.message, !r.ok);
     return r;
   } catch (e) {
@@ -653,8 +660,23 @@ async function runAction(name, args, okToast = true) {
 // ---------------------------------------------------------------------------
 const RENDER = {};
 
+const OVERVIEW_LABELS = ["TEAMS TRACKED", "MATCHES LOADED", "MY TEAM", "SESSION STATUS"];
 RENDER.overview = async () => {
-  const d = await view("overview");
+  // Before the engine has started, show the page straight away and fill in the numbers when it is ready.
+  const d = S.boot ? await view("overview") : { metrics: OVERVIEW_LABELS.map((label) => ({ label, value: "…" })), head: { loaded: false } };
+  const metrics = h("div", null, metricsRow(d.metrics));
+  if (!S.boot) {
+    metrics.append(h("p", { class: "muted small engine-line" }, h("span", { class: "engine-status-text", text: S.engineStatus })));
+    afterRender.push(() => {
+      const token = renderToken;
+      view("overview").then((full) => {
+        if (token !== renderToken || !metrics.isConnected) return;
+        metrics.replaceChildren(metricsRow(full.metrics));
+        const first = document.querySelector(".actions .action");
+        if (first) first.classList.toggle("primary", !full.head.loaded);
+      }).catch(() => {});
+    });
+  }
   const action = (n, title, desc, page, primary) => h("a", { class: "action" + (primary ? " primary" : ""), href: "#/" + page },
     h("b", { text: `${n}   ${title}` }), h("span", { text: desc }));
   const steps = [["01", "Set up your event", "Choose a season, event, and your team."],
@@ -664,7 +686,7 @@ RENDER.overview = async () => {
   return [
     hero("COMPETITION COMMAND CENTER", "Scout smarter. Pick stronger alliances.",
       "Your match data, team intelligence, and strategy tools all in one workspace."),
-    metricsRow(d.metrics),
+    metrics,
     h("div", { class: "grid-even" },
       card("Quick actions", h("div", { class: "actions" },
         action("01", "Load an event", "Bring in teams, schedule, and match results.", "setup", !d.head.loaded),
@@ -845,146 +867,378 @@ RENDER.teams = async (params) => {
   return nodes;
 };
 
-async function syncTeamNotesToCloud() {
-  const storage = window.AutoScoutTeamStorage;
-  if (!storage || !storage.signedIn()) return;
-  const d = await view("notes");
-  const [remoteMatches, remoteTeams] = await Promise.all([
-    storage.getFile("match-notes.json").catch(() => ({data:{matches:{}},etag:null})),
-    storage.getFile("team-notes.json").catch(() => ({data:{teams:{}},etag:null}))
-  ]);
-  const matchNotes = remoteMatches.data.matches || {};
-  const savePhoto = async (photo, id) => {
-    if (!photo || !String(photo).startsWith("data:image/")) return "";
-    const path = "photos/" + id.replace(/[^A-Za-z0-9_-]/g,"_").slice(0,75) + ".json";
-    const old = await storage.getFile(path).catch(() => ({etag:null}));
-    await storage.putFile(path, {data:photo}, old.etag);
-    return path.slice("photos/".length, -".json".length);
-  };
-  for (const match of d.matches || []) {
-    const combined = [...(matchNotes[match.label] || [])];
-    const known = new Set(combined.map(n => JSON.stringify([n.time,n.team,n.phase,n.text])));
-    for (let index=0; index<(match.notes||[]).length; index++) {
-      const note = match.notes[index];
-      const photoRef = note.photo ? await savePhoto(note.photo, "m_"+match.label+"_"+note.time+"_"+index) : (note.photoRef || "");
-      const item = {time:note.time,team:note.team,phase:note.phase,text:note.text,photoRef};
-      const key = JSON.stringify([item.time,item.team,item.phase,item.text]);
-      if (!known.has(key)) { combined.push(item); known.add(key); }
+// ---------------------------------------------------------------------------
+// Team account and shared notes
+//
+// Notes are always saved in this browser's session first (exactly as before),
+// so scouting works with no account and no signal. When signed in to a team
+// account, each new note is also shared to the team's files, and the Notes
+// pages show this device's notes and the team's shared notes together.
+// A note is identified by its team/match, time and text, the same key the
+// earlier sync used, so notes shared before this version are recognised.
+// ---------------------------------------------------------------------------
+const Team = window.AutoScoutTeamStorage || null;
+const teamReady = () => !!(Team && Team.configured());
+const teamOn = () => !!(Team && Team.signedIn());
+const CLOUD = { team: null, at: 0, matches: {}, teams: {}, error: "", loading: null };
+const CLOUD_FRESH_MS = 60 * 1000;            // reuse shared notes fetched in the last minute
+const photoCache = new Map();                // photoRef -> data URL (or a pending promise)
+
+const teamNoteKey = (team, n) => JSON.stringify([String(team), String(n.time || ""), String(n.text || "")]);
+const matchNoteKey = (label, n) => JSON.stringify([String(label), String(n.time || ""), String(n.team || "General"),
+  String(n.phase || "Overall"), String(n.text || "")]);
+const photoId = (raw) => String(raw).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 75);
+function eventId() { const hd = S.head || {}; return hd.code ? `${hd.season}/${hd.code}` : ""; }
+function forThisEvent(n) { return !n.event || n.event === eventId(); }   // older shared notes have no event
+
+function resetCloud() {
+  Object.assign(CLOUD, { team: teamOn() ? Team.currentTeam() : null, at: 0, matches: {}, teams: {}, error: "", loading: null });
+}
+function cloudReady() { return teamOn() && CLOUD.team === Team.currentTeam() && CLOUD.at > 0; }
+
+async function fetchCloudNotes(force = false) {
+  if (!teamOn()) return CLOUD;
+  const team = Team.currentTeam();
+  if (CLOUD.team !== team) resetCloud();
+  if (!force && CLOUD.at && Date.now() - CLOUD.at < CLOUD_FRESH_MS) return CLOUD;
+  if (CLOUD.loading) return CLOUD.loading;
+  CLOUD.loading = (async () => {
+    try {
+      const [m, t] = await Promise.all([
+        Team.getFileOr("match-notes.json", { schema: 1, matches: {} }),
+        Team.getFileOr("team-notes.json", { schema: 1, teams: {} })]);
+      if (CLOUD.team === team) Object.assign(CLOUD, { at: Date.now(), matches: m.data.matches || {}, teams: t.data.teams || {}, error: "" });
+    } catch (e) {
+      if (CLOUD.team === team) CLOUD.error = e.message;
+    } finally {
+      CLOUD.loading = null;
     }
-    matchNotes[match.label] = combined.sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
-  }
-  const teamNotes = remoteTeams.data.teams || {};
-  for (const note of d.team_notes || []) {
-    const rows = teamNotes[note.team] ||= [];
-    const photoRef = note.photo ? await savePhoto(note.photo, "t_"+note.team+"_"+note.time) : (note.photoRef || "");
-    const key = JSON.stringify([note.time,note.text]);
-    if (!rows.some(n => JSON.stringify([n.time,n.text]) === key))
-      rows.push({time:note.time,text:note.text,photoRef});
-  }
-  await storage.putFile("match-notes.json", {schema:1,matches:matchNotes}, remoteMatches.etag);
-  await storage.putFile("team-notes.json", {schema:1,teams:teamNotes}, remoteTeams.etag);
+    return CLOUD;
+  })();
+  return CLOUD.loading;
 }
 
-async function deleteSharedNote(kind, args) {
-  const storage = window.AutoScoutTeamStorage;
-  if (kind === "note_delete") {
-    const file = await storage.getFile("match-notes.json");
-    const rows = file.data.matches && file.data.matches[args.match] || [];
-    const index = Number(args.index);
-    if (index >= 0 && index < rows.length) rows.splice(index,1);
-    await storage.putFile("match-notes.json", file.data, file.etag);
-  } else {
-    const file = await storage.getFile("team-notes.json");
-    const team = String(args.team || "");
-    const rows = file.data.teams && file.data.teams[team] || [];
-    const index = Number(args.index);
-    if (index >= 0 && index < rows.length) rows.splice(index,1);
-    if (!rows.length) delete file.data.teams[team];
-    await storage.putFile("team-notes.json", file.data, file.etag);
+async function uploadPhoto(rawId, data) {
+  if (!data || !String(data).startsWith("data:image/")) return "";
+  const id = photoId(rawId);
+  await Team.putFile("photos/" + id + ".json", { data });
+  photoCache.set(id, data);
+  return id;
+}
+
+/** Share notes to the team files. teamNotes: [{team,time,text,photo}], matchNotes: [{match,time,team,phase,text,photo}].
+    Notes already shared are skipped, so photos are only uploaded once. Returns how many were added. */
+async function shareNotes(teamNotes, matchNotes) {
+  await fetchCloudNotes(true);
+  if (CLOUD.error) throw new Error(CLOUD.error);
+  const ev = eventId();
+  const haveTeam = new Set(Object.entries(CLOUD.teams).flatMap(([t, rows]) => rows.map((n) => teamNoteKey(t, n))));
+  const haveMatch = new Set(Object.entries(CLOUD.matches).flatMap(([m, rows]) => rows.map((n) => matchNoteKey(m, n))));
+  const newTeam = [], newMatch = [];
+  for (const n of teamNotes) {
+    if (haveTeam.has(teamNoteKey(n.team, n))) continue;
+    const photoRef = n.photo ? await uploadPhoto("t_" + n.team + "_" + n.time, n.photo) : (n.photoRef || "");
+    newTeam.push({ team: String(n.team), row: { time: n.time, text: n.text, photoRef } });
+  }
+  for (const [i, n] of matchNotes.entries()) {
+    if (haveMatch.has(matchNoteKey(n.match, n))) continue;
+    const photoRef = n.photo ? await uploadPhoto("m_" + n.match + "_" + n.time + "_" + i, n.photo) : (n.photoRef || "");
+    newMatch.push({ match: String(n.match), row: { time: n.time, team: n.team || "General", phase: n.phase || "Overall", text: n.text, photoRef, ...(ev ? { event: ev } : {}) } });
+  }
+  if (newTeam.length) {
+    const saved = await Team.updateFile("team-notes.json", { schema: 1, teams: {} }, (data) => {
+      data.schema = data.schema || 1;
+      const teams = data.teams = data.teams || {};
+      let added = 0;
+      for (const { team, row } of newTeam) {
+        const rows = teams[team] = teams[team] || [];
+        if (!rows.some((n) => teamNoteKey(team, n) === teamNoteKey(team, row))) { rows.push(row); added++; }
+      }
+      return added > 0;
+    });
+    CLOUD.teams = saved.teams || {};
+  }
+  if (newMatch.length) {
+    const saved = await Team.updateFile("match-notes.json", { schema: 1, matches: {} }, (data) => {
+      data.schema = data.schema || 1;
+      const matches = data.matches = data.matches || {};
+      let added = 0;
+      for (const { match, row } of newMatch) {
+        const rows = matches[match] = matches[match] || [];
+        if (!rows.some((n) => matchNoteKey(match, n) === matchNoteKey(match, row))) { rows.push(row); added++; }
+        rows.sort((a, b) => String(a.time || "").localeCompare(String(b.time || "")));
+      }
+      return added > 0;
+    });
+    CLOUD.matches = saved.matches || {};
+  }
+  CLOUD.at = Date.now();
+  return newTeam.length + newMatch.length;
+}
+
+/** Share every note saved on this device that the team does not have yet. */
+async function shareAllLocalNotes() {
+  const d = await view("notes");
+  const teamNotes = (d.team_notes || []).map((n) => ({ team: n.team, time: n.time, text: n.text, photo: n.photo }));
+  const matchNotes = (d.matches || []).flatMap((m) => (m.notes || []).map((n) => ({ match: m.label, ...n })));
+  return shareNotes(teamNotes, matchNotes);
+}
+
+async function unshareNote(kind, group, key, photoRef) {
+  const file = kind === "team" ? "team-notes.json" : "match-notes.json";
+  const field = kind === "team" ? "teams" : "matches";
+  const keyOf = kind === "team" ? teamNoteKey : matchNoteKey;
+  const saved = await Team.updateFile(file, { schema: 1, [field]: {} }, (data) => {
+    const rows = (data[field] || {})[group] || [];
+    const i = rows.findIndex((n) => keyOf(group, n) === key);
+    if (i < 0) return false;
+    rows.splice(i, 1);
+    if (!rows.length) delete data[field][group];
+    return true;
+  });
+  CLOUD[field] = saved[field] || {};
+  if (photoRef) {
+    const stillUsed = Object.values(CLOUD.teams).concat(Object.values(CLOUD.matches)).flat().some((n) => n.photoRef === photoRef);
+    if (!stillUsed) { Team.deleteFile("photos/" + photoRef + ".json").catch(() => {}); photoCache.delete(photoRef); }
   }
 }
-async function loadTeamNotesFromCloud(d) {
-  const storage = window.AutoScoutTeamStorage;
-  if (!storage || !storage.signedIn()) return d;
-  try {
-    const [matchFile, teamFile] = await Promise.all([
-      storage.getFile("match-notes.json").catch(() => ({data:{matches:{}}})),
-      storage.getFile("team-notes.json").catch(() => ({data:{teams:{}}}))
-    ]);
-    const resolvePhoto = async note => {
-      if (!note.photoRef) return note;
-      try { const photo = await storage.getFile("photos/" + note.photoRef + ".json"); return {...note,photo:photo.data.data||""}; }
-      catch { return {...note,photo:""}; }
-    };
-    const matches = matchFile.data.matches || {};
-    d.matches = await Promise.all((d.matches || []).map(async m => ({...m, notes:await Promise.all((matches[m.label] || []).map(async (n,index)=>({...await resolvePhoto(n),index})))})));
-    const teams = teamFile.data.teams || {};
-    d.team_notes = await Promise.all(Object.entries(teams).flatMap(([team, rows]) => rows.map(async (n,index)=>({team,time:n.time,text:n.text,photo:(await resolvePhoto(n)).photo,index}))))
-      .sort((a,b)=>String(a.time||"").localeCompare(String(b.time||"")));
-    d.team_options = [...new Set([...(d.team_options||[]), ...Object.keys(teams)])].sort((a,b)=>Number(a)-Number(b));
-    d.note_count = d.matches.reduce((sum,m)=>sum+(m.notes||[]).length,0);
-  } catch (e) { toast("Could not load shared team notes: " + e.message, true); }
-  return d;
+
+// ---- Adding and deleting notes (local first, then shared) ------------------
+async function addTeamNote(args) {
+  const r = await runAction("team_note_add", args, false);
+  if (!r.ok) { if (!r.message) toast("Could not save team note.", true); return r; }
+  if (teamOn() && r.note) {
+    try { await shareNotes([{ ...r.note, photo: args.photo }], []); toast(`Saved and shared with Team ${Team.currentTeam()}.`); }
+    catch (e) { toast("Saved on this device. Not shared yet: " + e.message, true); }
+  } else toast(r.message);
+  return r;
+}
+async function addMatchNote(args) {
+  const r = await runAction("note_add", args, false);
+  if (!r.ok) { if (!r.message) toast("Could not save note.", true); return r; }
+  if (teamOn() && r.note) {
+    try { await shareNotes([], [{ match: args.match, ...r.note, photo: args.photo }]); toast(`${r.message} Shared with Team ${Team.currentTeam()}.`); }
+    catch (e) { toast("Saved on this device. Not shared yet: " + e.message, true); }
+  } else toast(r.message);
+  return r;
+}
+/** n: a merged note ({local, localIndex, shared, photoRef}). Shared notes are removed for the whole team. */
+function deleteNote(kind, group, n, after) {
+  const key = kind === "team" ? teamNoteKey(group, n) : matchNoteKey(group, n);
+  const run = async () => {
+    try {
+      if (n.shared) await unshareNote(kind, group, key, n.photoRef);
+      if (n.local) {
+        const r = await act(kind === "team" ? "team_note_delete" : "note_delete",
+          kind === "team" ? { team: group, index: n.localIndex } : { match: group, index: n.localIndex });
+        if (!r.ok) throw new Error(r.message || "Could not delete the note.");
+      }
+      toast("Note deleted.");
+    } catch (e) { toast("Could not delete the note: " + e.message, true); }
+    if (after) after();
+  };
+  if (n.shared) confirmDialog("Delete shared note?", `This removes the note for everyone on Team ${Team.currentTeam()}.`, "Delete", run);
+  else run();
+}
+
+// ---- Merging this device's notes with the team's ---------------------------
+function mergedTeamNotes(local) {
+  const out = new Map();
+  for (const n of local || []) out.set(teamNoteKey(n.team, n), { ...n, local: true, localIndex: n.index, shared: false });
+  if (cloudReady()) {
+    for (const [team, rows] of Object.entries(CLOUD.teams)) for (const n of rows || []) {
+      const k = teamNoteKey(team, n), cur = out.get(k);
+      if (cur) { cur.shared = true; cur.photoRef = n.photoRef || ""; }
+      else out.set(k, { team: String(team), time: n.time || "", text: n.text || "", photo: "", photoRef: n.photoRef || "", local: false, shared: true });
+    }
+  }
+  return [...out.values()].sort((a, b) => String(b.time).localeCompare(String(a.time)) || Number(a.team) - Number(b.team));
+}
+function mergedMatchNotes(label, local) {
+  const out = new Map();
+  (local || []).forEach((n, i) => {
+    const note = { ...n, team: n.team || "General", phase: n.phase || "Overall" };
+    out.set(matchNoteKey(label, note), { ...note, local: true, localIndex: n.index ?? i, shared: false });
+  });
+  if (cloudReady()) {
+    for (const n of CLOUD.matches[label] || []) {
+      if (!forThisEvent(n)) continue;
+      const k = matchNoteKey(label, n), cur = out.get(k);
+      if (cur) { cur.shared = true; cur.photoRef = n.photoRef || ""; }
+      else out.set(k, { time: n.time || "", team: n.team || "General", phase: n.phase || "Overall", text: n.text || "", photo: "", photoRef: n.photoRef || "", local: false, shared: true });
+    }
+  }
+  return [...out.values()].sort((a, b) => String(a.time).localeCompare(String(b.time)));
+}
+
+// Shared photos load only when they scroll into view, a few at a time.
+let photoSlots = 0;
+const photoWaiting = [];
+function loadSharedPhoto(ref) {
+  if (photoCache.has(ref)) return Promise.resolve(photoCache.get(ref));
+  const p = new Promise((resolve) => photoWaiting.push({ ref, resolve })).then((data) => { photoCache.set(ref, data); return data; });
+  photoCache.set(ref, p);
+  pumpPhotos();
+  return p;
+}
+function pumpPhotos() {
+  while (photoSlots < 3 && photoWaiting.length) {
+    const { ref, resolve } = photoWaiting.shift();
+    photoSlots++;
+    Team.getFile("photos/" + ref + ".json").then((f) => resolve((f.data && f.data.data) || ""), () => { photoCache.delete(ref); resolve(""); })
+      .finally(() => { photoSlots--; pumpPhotos(); });
+  }
+}
+const photoObserver = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { photoObserver.unobserve(e.target); e.target._load(); }
+}, { rootMargin: "300px" }) : null;
+function notePhoto(n, className = "note-photo") {
+  if (n.photo) return photoPreview(n.photo, className);
+  if (!n.photoRef || !teamOn()) return null;
+  const box = h("div", { class: "note-photo-slot" }, h("span", { class: "muted small", text: "Loading photo…" }));
+  box._load = async () => {
+    const data = await loadSharedPhoto(n.photoRef);
+    box.replaceWith(data ? photoPreview(data, className) : h("span", { class: "muted small", text: "Photo unavailable." }));
+  };
+  if (photoObserver) photoObserver.observe(box); else box._load();
+  return box;
+}
+function noteBadge(n) {
+  if (!teamOn()) return null;
+  if (n.shared && !n.local) return h("span", { class: "note-badge shared", text: "Team", title: "Shared by your team" });
+  if (n.shared) return h("span", { class: "note-badge shared", text: "Shared", title: "Saved here and shared with your team" });
+  return h("span", { class: "note-badge local", text: "Not shared", title: "Only on this device" });
+}
+
+/** The strip at the top of the Notes pages: where notes are saved, and sync controls. */
+function notesSyncBar(unshared) {
+  if (!teamReady()) return null;
+  if (!teamOn()) {
+    return h("div", { class: "sync-bar" },
+      h("span", { class: "sync-dot off", "aria-hidden": "true" }),
+      h("span", { class: "sync-text", text: "Notes are saved on this device only." }),
+      btn("Sign in to share with your team", () => openSignIn(), "small primary"));
+  }
+  const when = CLOUD.at ? new Date(CLOUD.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  return h("div", { class: "sync-bar" + (CLOUD.error ? " err" : "") },
+    h("span", { class: "sync-dot" + (CLOUD.error ? " bad" : ""), "aria-hidden": "true" }),
+    h("span", { class: "sync-text" },
+      h("b", { text: `Team ${Team.currentTeam()}` }),
+      CLOUD.error ? ` · Shared notes unavailable: ${CLOUD.error} Showing this device's notes.` :
+        ` · shared notes${when ? " updated " + when : ""}`),
+    unshared ? btn(`Share ${unshared} note${unshared === 1 ? "" : "s"} from this device`, async (e) => {
+      e.target.disabled = true;
+      try { const n = await shareAllLocalNotes(); toast(n ? `Shared ${n} note${n === 1 ? "" : "s"} with Team ${Team.currentTeam()}.` : "Everything is already shared."); }
+      catch (err) { toast("Could not share notes: " + err.message, true); }
+      rerender();
+    }, "small primary") : null,
+    btn("Refresh", async (e) => { e.target.disabled = true; await fetchCloudNotes(true); rerender(); }, "small"));
 }
 
 RENDER.notes = async () => {
-  const d = await view("notes");
-  await loadTeamNotesFromCloud(d);
+  const [d] = await Promise.all([view("notes"), fetchCloudNotes()]);
   return renderNotesWorkspace(d);
 };
 
 function renderNotesWorkspace(d) {
-  const tabs = h("div", { class: "notes-main-tabs" },
+  const teamNotes = mergedTeamNotes(d.team_notes);
+  const matchNotes = new Map((d.matches || []).map((m) => [m.label, mergedMatchNotes(m.label, m.notes)]));
+  const unshared = !teamOn() || !cloudReady() ? 0 :
+    teamNotes.filter((n) => !n.shared).length + [...matchNotes.values()].flat().filter((n) => !n.shared).length;
+  const tabs = h("div", { class: "notes-main-tabs", role: "tablist" },
     btn("Match Notes", () => { S.notesTab = "matches"; rerender(); }, S.notesTab === "matches" ? "primary" : ""),
-    btn("Team Notes", () => { S.notesTab = "teams"; rerender(); }, S.notesTab === "teams" ? "primary" : ""));
-  return [tabs, ...(S.notesTab === "teams" ? renderTeamNotes(d) : renderNotesTimeline(d))];
+    btn(`Team Notes${teamNotes.length ? ` (${teamNotes.length})` : ""}`, () => { S.notesTab = "teams"; rerender(); }, S.notesTab === "teams" ? "primary" : ""));
+  return [notesSyncBar(unshared), tabs, ...(S.notesTab === "teams" ? renderTeamNotes(d, teamNotes) : renderNotesTimeline(d, matchNotes))];
 }
 
-function renderTeamNotes(d) {
-  const options = d.team_options || [];
-  if (!S.notesTeam && options.length) S.notesTeam = options[0];
-  const team = h("input", { type: "number", min: 1, step: 1, value: S.notesTeam || "", placeholder: "Enter team number",
-    onchange: (e) => { S.notesTeam = e.target.value.trim(); } });
-  const text = h("textarea", { rows: 4, placeholder: "Team observations, robot capabilities, strategy, reliability, driver practice, etc." });
-  let photo = "";
-  const photoStatus = h("span", { class: "muted small", text: "No photo attached" });
-  const add = async () => {
-    const r = await runAction("team_note_add", { team: S.notesTeam, text: text.value, photo }, false);
-    if (r.ok) { toast(r.message); rerender(); }
-    else toast(r.message || "Could not save team note.", true);
+function renderTeamNotes(d, notes) {
+  const draft = S.teamNoteDraft = S.teamNoteDraft || { team: "", text: "", photo: "" };
+  const counts = {};
+  for (const n of notes) counts[n.team] = (counts[n.team] || 0) + 1;
+  const teams = [...new Set([...(d.team_options || []), ...Object.keys(counts)])].sort((a, b) => Number(a) - Number(b));
+  if (S.notesTeam && !teams.includes(String(S.notesTeam))) S.notesTeam = "";
+  if (!draft.team && S.notesTeam) draft.team = S.notesTeam;
+
+  // ---- add a note
+  const listId = "team-note-teams";
+  const team = h("input", { type: "text", inputmode: "numeric", pattern: "[0-9]*", value: draft.team, list: listId,
+    placeholder: "Team number", autocomplete: "off", oninput: (e) => { draft.team = e.target.value.trim(); } });
+  const teamList = h("datalist", { id: listId }, teams.map((t) => h("option", { value: t })));
+  const text = h("textarea", { rows: 4, value: draft.text,
+    placeholder: "Robot capabilities, strategy, reliability, driver skill, what they asked us for…",
+    oninput: (e) => { draft.text = e.target.value; } });
+  text.value = draft.text;
+  const photoStatus = h("span", { class: "muted small", text: draft.photo ? "Photo attached" : "No photo attached" });
+  const save = btn(teamOn() ? "Save and share" : "Save team note", async () => {
+    if (!/^\d+$/.test(draft.team)) { toast("Enter the team number first.", true); team.focus(); return; }
+    save.disabled = true;
+    const r = await addTeamNote({ team: draft.team, text: draft.text, photo: draft.photo });
+    save.disabled = false;
+    if (r.ok) {
+      S.teamNoteDraft = { team: draft.team, text: "", photo: "" };
+      if (S.notesTeam) S.notesTeam = draft.team;        // a filtered list follows the team just noted
+      rerender();
+    }
+  }, "primary");
+  const where = teamOn() ? `Saved on this device and shared with Team ${Team.currentTeam()}.` :
+    "Saved with this AutoScout session on this device." + (teamReady() ? " Sign in to share with your team." : "");
+
+  // ---- list, filtered by team and by text
+  const listBox = h("div", { class: "team-note-list" });
+  const drawList = () => {
+    const q = (S.notesQuery || "").trim().toLowerCase();
+    const shown = notes.filter((n) => (!S.notesTeam || n.team === String(S.notesTeam)) && (!q || n.text.toLowerCase().includes(q) || n.team.includes(q)));
+    listBox.textContent = "";
+    if (!shown.length) {
+      listBox.append(h("p", { class: "muted small", text: notes.length ? "No notes match this filter." : "No team notes yet. Add an observation or attach a photo above." }));
+      return;
+    }
+    for (const n of shown) {
+      listBox.append(h("article", { class: "team-note-entry" },
+        h("div", { class: "match-note-meta" },
+          S.notesTeam ? h("strong", { text: "Team " + n.team }) :
+            h("button", { class: "linkbtn strong", type: "button", title: "Show only this team", onclick: () => { S.notesTeam = n.team; rerender(); } }, "Team " + n.team),
+          h("span", { class: "note-time", text: n.time || "Time not recorded" }),
+          noteBadge(n),
+          btn("Delete", () => deleteNote("team", n.team, n, rerender), "small danger")),
+        n.text ? h("p", { class: "match-note-text", text: n.text }) : null,
+        notePhoto(n)));
+    }
   };
-  const visible = (d.team_notes || []).filter((n) => !S.notesTeam || n.team === String(S.notesTeam));
-  const list = visible.map((n) => h("article", { class: "team-note-entry" },
-    h("div", { class: "match-note-meta" },
-      h("strong", { text: "Team " + n.team }),
-      h("span", { class: "note-time", text: n.time || "Time not recorded" }),
-      btn("Delete", async () => {
-        const r = await runAction("team_note_delete", { team: n.team, index: n.index }, false);
-        if (r.ok) rerender(); else toast(r.message || "Could not delete note.", true);
-      }, "small danger")),
-    n.text ? h("p", { class: "match-note-text", text: n.text }) : null,
-    photoPreview(n.photo)));
+  drawList();
+  const filter = select([["", `All teams (${notes.length})`], ...teams.map((t) => [t, counts[t] ? `${t}  (${counts[t]})` : t])],
+    S.notesTeam, (v) => { S.notesTeam = v; if (v) draft.team = v; rerender(); });
+  const search = h("input", { type: "search", value: S.notesQuery || "", placeholder: "Search notes", autocomplete: "off",
+    oninput: (e) => { S.notesQuery = e.target.value; drawList(); } });
+
   return [
-    card("Team Notes",
-      h("p", { class: "muted small", text: "These notes belong to a team, not an individual match. They stay separate from Match Notes and are saved with this AutoScout session." }),
-      field("Team number", team),
-      field("Team observation", text),
+    card("Add a team note",
+      h("p", { class: "muted small", text: "Notes about a team, not one match. " + where }),
+      h("div", { class: "form" }, field("Team number", h("span", { class: "combo" }, team, teamList))),
+      field("Observation", text),
       h("div", { class: "row team-note-actions" },
-        btn("Add photo", async () => { photo = await imageAttachment(); photoStatus.textContent = photo ? "Photo attached" : "No photo attached"; }, "small"),
+        btn(draft.photo ? "Replace photo" : "Add photo", async () => {
+          const p = await imageAttachment();
+          if (p) { draft.photo = p; photoStatus.textContent = "Photo attached"; }
+        }, "small"),
         photoStatus,
-        btn("Save team note", add, "primary"))),
+        draft.photo ? btn("Remove photo", () => { draft.photo = ""; photoStatus.textContent = "No photo attached"; }, "small") : null,
+        h("span", { class: "spacer" }),
+        save)),
     card(S.notesTeam ? `Notes for Team ${S.notesTeam}` : "All team notes",
-      h("div", { class: "row" }, field("Filter by team", select([["", "All teams"], ...options.map((n) => [n, n])], S.notesTeam, (v) => { S.notesTeam = v; rerender(); }))),
-      list.length ? h("div", { class: "team-note-list" }, list) :
-        h("p", { class: "muted small", text: "No team notes yet. Add an observation or attach a photo above." }))
+      h("div", { class: "row notes-filter" }, field("Team", filter), field("Search", search, "wide"),
+        S.notesTeam ? btn("Show all teams", () => { S.notesTeam = ""; rerender(); }, "small") : null),
+      listBox),
   ];
 }
 
-function renderNotesTimeline(d) {
-  if (!d.loaded) return card("Match notes", h("p", { class: "muted", text: "Load a meet on Setup to see its schedule and scouting notes here." }));
+function renderNotesTimeline(d, merged) {
+  if (!d.loaded) return [card("Match notes", h("p", { class: "muted", text: "Load a meet on Setup to see its schedule and scouting notes here." }))];
+  let total = 0;
   const groups = d.matches.map((m) => {
     const status = m.played ? "Played" : "Scheduled";
-    const notes = (m.notes || []).slice().sort((a, b) => String(a.time || "").localeCompare(String(b.time || "")));
+    const notes = merged.get(m.label) || [];
+    total += notes.length;
     return h("section", { class: "match-note-group" },
       h("div", { class: "match-note-head" },
         h("div", null, h("h3", { text: m.label }), h("span", { class: "muted small", text: `Red: ${m.red.join(" · ")}  |  Blue: ${m.blue.join(" · ")}` })),
@@ -998,18 +1252,183 @@ function renderNotesTimeline(d) {
             h("span", { class: "note-time", text: n.time || "Time not recorded" }),
             h("span", { text: n.team || "General" }),
             h("span", { text: n.phase || "Overall" }),
-            btn("Delete", async () => { await runAction("note_delete", { match: m.label, index: n.index }, false); rerender(); }, "small danger")),
+            noteBadge(n),
+            btn("Delete", () => deleteNote("match", m.label, n, rerender), "small danger")),
           h("p", { class: "match-note-text", text: n.text || "" }),
-          photoPreview(n.photo)))) :
+          notePhoto(n)))) :
         h("p", { class: "muted small no-match-notes", text: "No notes recorded for this match yet." }));
   });
   return [
     h("div", { class: "notes-overview" },
-      h("div", null, h("h2", { text: d.event || "Event schedule" }), h("p", { class: "muted small", text: `${d.matches.length} scheduled matches · ${d.note_count} scouting notes · listed in match order` })),
+      h("div", null, h("h2", { text: d.event || "Event schedule" }), h("p", { class: "muted small", text: `${d.matches.length} scheduled matches · ${total} scouting notes · listed in match order` })),
       btn("Open Schedule Data", () => go("competition"), "small")),
     ...groups,
   ];
 }
+
+// ---- Signing in ------------------------------------------------------------
+function openSignIn(mode = "signin") {
+  if (!teamReady()) { toast("Team storage is not set up for this site.", true); return; }
+  modal((close) => {
+    let creating = mode === "create";
+    const title = h("h2");
+    const intro = h("p", { class: "muted small" });
+    const team = h("input", { type: "text", inputmode: "numeric", pattern: "[0-9]*", name: "username", autocomplete: "username",
+      placeholder: "e.g. 12928", value: (S.head && S.head.my_team) || "" });
+    const pw = h("input", { type: "password", name: "password", placeholder: "Shared team password" });
+    const code = h("input", { type: "password", name: "setup-code", autocomplete: "off", placeholder: "From the AutoScout administrator" });
+    const codeField = field("Team setup code", code);
+    const msg = h("p", { class: "status", role: "alert" });
+    const submit = h("button", { class: "btn primary", type: "submit" });
+    const toggle = h("button", { class: "linkbtn", type: "button", onclick: () => { creating = !creating; msg.textContent = ""; draw(); } });
+    const show = check("Show password", false, (v) => { pw.type = v ? "text" : "password"; });
+    function draw() {
+      title.textContent = creating ? "Create a team account" : "Sign in to your team";
+      intro.textContent = creating
+        ? "One shared account per team. Choose a password of at least 12 characters that you don't use anywhere else, and share it only with your team."
+        : "Share scouting notes, photos and sessions with everyone on your team. You stay signed in on this device for 12 hours.";
+      codeField.hidden = !creating;
+      pw.autocomplete = creating ? "new-password" : "current-password";
+      submit.textContent = creating ? "Create team account" : "Sign in";
+      toggle.textContent = creating ? "Already have a team account? Sign in" : "New team? Create a team account";
+    }
+    draw();
+    const form = h("form", { class: "signin-form", novalidate: true, onsubmit: async (e) => {
+      e.preventDefault();
+      const t = team.value.trim();
+      msg.className = "status err";
+      if (!/^\d{1,8}$/.test(t)) { msg.textContent = "Enter your FTC team number."; team.focus(); return; }
+      if (!pw.value) { msg.textContent = "Enter the team password."; pw.focus(); return; }
+      if (creating && pw.value.length < 12) { msg.textContent = "Use a team password with at least 12 characters."; pw.focus(); return; }
+      if (creating && !code.value.trim()) { msg.textContent = "Enter the team setup code."; code.focus(); return; }
+      submit.disabled = true;
+      msg.className = "status";
+      msg.textContent = creating ? "Creating the account…" : "Signing in…";
+      try {
+        if (creating) await Team.register(t, pw.value, code.value.trim());
+        else await Team.login(t, pw.value);
+        close();
+        toast(creating ? `Team ${t} account created. You're signed in.` : `Signed in to Team ${t}.`);
+      } catch (err) {
+        msg.className = "status err";
+        msg.textContent = err.message;
+        submit.disabled = false;
+      }
+    } },
+      field("Team number", team), field("Team password", pw), show, codeField, msg,
+      h("div", { class: "foot" }, toggle, h("span", { class: "spacer" }), btn("Cancel", close), submit));
+    return [h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
+      title, intro, form,
+      h("p", { class: "note", text: "Team data is stored in a public GitHub repository: anyone can read it. Don't put private or personal information in notes." })];
+  });
+}
+
+// Shared sessions: sessions/<season_code>.json, plus sessions/index.json listing them
+// (the storage service lists only the team's top folder, so the index is how they are found).
+async function saveSessionToTeam() {
+  const exported = await act("export", { kind: "session" });
+  if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
+  const hd = S.head || {};
+  const slug = (String(hd.season || "season") + "_" + String(hd.code || "session")).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 70);
+  const sessionData = JSON.parse(exported.text);
+  sessionData.live_notes = {};          // notes are shared separately, with their own sync
+  sessionData.team_notes = {};
+  await Team.putFile("sessions/" + slug + ".json", sessionData);
+  await Team.updateFile("sessions/index.json", { schema: 1, sessions: {} }, (data) => {
+    data.schema = 1;
+    data.sessions = data.sessions || {};
+    data.sessions[slug] = { event: hd.event || hd.code || slug, season: hd.season || "", code: hd.code || "", saved: new Date().toISOString() };
+  });
+  return slug;
+}
+async function listTeamSessions() {
+  const out = new Map();
+  const index = await Team.getFileOr("sessions/index.json", { sessions: {} });
+  for (const [slug, info] of Object.entries((index.data && index.data.sessions) || {})) out.set(slug, { slug, ...info });
+  try {      // a storage service that can list the sessions folder also finds sessions saved before the index existed
+    for (const f of await Team.listFiles("sessions")) {
+      const m = /(?:^|\/)sessions\/([A-Za-z0-9_-]+)\.json$/.exec(f.path || "");
+      if (m && m[1] !== "index" && !out.has(m[1])) out.set(m[1], { slug: m[1], event: m[1].replace(/_/g, " ") });
+    }
+  } catch (_) { /* the index is enough */ }
+  return [...out.values()].sort((a, b) => String(b.saved || "").localeCompare(String(a.saved || "")));
+}
+async function openTeamSessions() {
+  const list = await listTeamSessions();
+  modal((close) => [
+    h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
+    h("h2", { text: `Team ${Team.currentTeam()} sessions` }),
+    list.length ? h("div", { class: "sessions" }, list.map((s) => h("div", { class: "sess" },
+      h("div", { class: "info" }, h("b", { text: s.event || s.slug }),
+        h("span", { class: "muted small", text: [s.season && s.code ? `${s.season}/${s.code}` : "", s.saved ? "saved " + new Date(s.saved).toLocaleString() : ""].filter(Boolean).join(" · ") })),
+      btn("Open", async (e) => {
+        e.currentTarget.disabled = true;
+        try {
+          const result = await Team.getFile("sessions/" + s.slug + ".json");
+          const imported = await act("import", { text: JSON.stringify(result.data) });
+          if (!imported.ok) throw new Error(imported.message || "Could not open the shared session.");
+          close();
+          toast("Opened shared session.");
+          rerender();
+        } catch (err) { toast(err.message, true); e.target.disabled = false; }
+      }, "small primary")))) :
+      h("p", { class: "muted", text: "No shared sessions yet. Use \"Save session to team\" to share the open one." }),
+    h("p", { class: "note", text: "Opening a shared session replaces the open one in this browser. Your notes are kept: they are saved separately." }),
+    h("div", { class: "foot" }, btn("Close", close)),
+  ]);
+}
+
+/** Account status and actions: used by the top-bar account dialog and Settings. */
+function accountPanel(onDone) {
+  if (!teamReady()) return h("p", { class: "muted", text: "Team sharing is not set up for this site. Everything is saved on this device." });
+  if (!teamOn()) {
+    return h("div", { class: "account-panel" },
+      h("p", { text: "You're using AutoScout on this device only. Notes and sessions are saved in this browser and work offline." }),
+      h("p", { class: "muted small", text: "Sign in with your team's shared account to see each other's scouting notes and photos." }),
+      h("div", { class: "row" }, btn("Sign in", () => { if (onDone) onDone(); openSignIn(); }, "primary"),
+        btn("Create team account", () => { if (onDone) onDone(); openSignIn("create"); })));
+  }
+  const until = new Date(Team.expiresAt()).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+  const busy = (fn) => async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await fn(); } catch (err) { toast(err.message, true); }
+    b.disabled = false;
+  };
+  return h("div", { class: "account-panel" },
+    h("div", { class: "account-status" }, h("span", { class: "sync-dot", "aria-hidden": "true" }),
+      h("div", null, h("b", { text: `Signed in to Team ${Team.currentTeam()}` }),
+        h("span", { class: "muted small", text: `Stays signed in on this device until ${until}.` }))),
+    h("div", { class: "account-actions" },
+      btn("Team notes", () => { if (onDone) onDone(); S.notesTab = "teams"; go("notes"); }, "small"),
+      btn("Share this device's notes", busy(async () => {
+        const n = await shareAllLocalNotes();
+        toast(n ? `Shared ${n} note${n === 1 ? "" : "s"} with Team ${Team.currentTeam()}.` : "Everything is already shared.");
+        if (S.page === "notes") rerender();
+      }), "small"),
+      btn("Save session to team", busy(async () => { await saveSessionToTeam(); toast(`Session saved to Team ${Team.currentTeam()}.`); }), "small"),
+      btn("Open a team session", busy(async () => { if (onDone) onDone(); await openTeamSessions(); }), "small"),
+      btn("Sign out", () => { if (onDone) onDone(); Team.signOut(); toast("Signed out. Notes stay saved on this device."); }, "small danger")));
+}
+function openAccount() {
+  if (!teamOn()) { openSignIn(); return; }
+  modal((close) => [h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
+    h("h2", { text: "Team account" }), accountPanel(close)]);
+}
+function updateAccountButton() {
+  const b = $("#accountBtn");
+  if (!b) return;
+  b.hidden = !teamReady();
+  const on = teamOn();
+  b.classList.toggle("on", on);
+  b.querySelector(".account-label").textContent = on ? `Team ${Team.currentTeam()}` : "Sign in";
+  b.title = on ? `Signed in to Team ${Team.currentTeam()}` : "Sign in to share notes with your team";
+  b.setAttribute("aria-label", b.title);
+}
+if (Team) Team.onChange(() => {
+  resetCloud();
+  updateAccountButton();
+  if (S.boot && (S.page === "notes" || S.page === "settings")) rerender();
+});
 
 function leagueInfoCard(info, teamNumber, onLoadEvent) {
   if (!info) return card("League standings & meet history", h("p", { class: "muted", text: "League and event information could not be loaded." }));
@@ -1206,8 +1625,8 @@ RENDER.research = async () => {
 // Open one consistent match detail view from every match list.
 async function openMatchDetails(label) {
   try {
-    const d = await view("match_detail", { match: String(label) });
-    const live = await view("live", { match: String(label) });
+    const [d, live, matchData] = await Promise.all([view("match_detail", { match: String(label) }),
+      view("live", { match: String(label) }), view("matches"), fetchCloudNotes()]);
     S.live.match = String(label);
     S.live.team = (live.match_teams && live.match_teams[0] && live.match_teams[0][0]) ? String(live.match_teams[0][0]) : "";
     const teams = (d.teams || []).map((side) => h("section", { class: "match-team-side " + side.color },
@@ -1224,7 +1643,6 @@ async function openMatchDetails(label) {
       }));
     };
     drawNotes(live);
-    const matchData = await view("matches");
     const matchColumns = matchData.table.columns.map((c) => c.key);
     const matchRow = matchData.table.rows.find((row) => String(row[0]) === String(label));
     modal((close) => [
@@ -1454,6 +1872,7 @@ function photoPreview(data, className = "note-photo") {
 }
 
 function notesCard(d, update) {
+  const shared = mergedMatchNotes(d.match, d.notes);
   if (!d.matches.length) return card("Match notes", h("p", { class: "muted", text: "Load or paste a match schedule before adding match-specific notes." }));
   const counts = d.note_counts || {};
   const match = select(d.matches.map((m) => [m, counts[m] ? `${m}  (${counts[m]})` : m]), d.match, (v) => update({ match: v }));
@@ -1467,11 +1886,11 @@ function notesCard(d, update) {
   let photo = "";
   const photoStatus = h("span", { class: "muted small", text: "No photo attached" });
   const list = h("div", { class: "notes" });
-  if (!d.notes.length) list.append(h("p", { class: "muted small", text: "No notes for this match yet." }));
-  d.notes.forEach((n, i) => list.append(h("div", { class: "notecard" },
-    h("span", { class: "meta", text: `${n.time || ""} · ${n.team || "General"} · ${n.phase || "Overall"}` }),
-    h("button", { class: "btn small danger", type: "button", onclick: async () => { await runAction("note_delete", { match: d.match, index: i }, false); update({}); } }, "Delete"),
-    h("span", { class: "txt", text: n.text || "" }), photoPreview(n.photo))));
+  if (!shared.length) list.append(h("p", { class: "muted small", text: "No notes for this match yet." }));
+  shared.forEach((n) => list.append(h("div", { class: "notecard" },
+    h("span", { class: "meta" }, `${n.time || ""} · ${n.team || "General"} · ${n.phase || "Overall"} `, noteBadge(n)),
+    h("button", { class: "btn small danger", type: "button", onclick: () => deleteNote("match", d.match, n, () => update({})) }, "Delete"),
+    h("span", { class: "txt", text: n.text || "" }), notePhoto(n))));
   return card("Match notes",
     h("div", { class: "form" }, field("Match", match), field("Team", team), field("Phase", phase)),
     h("label", { class: "field", style: { marginTop: "10px" } }, h("span", { text: "Observation" }), text),
@@ -1479,7 +1898,7 @@ function notesCard(d, update) {
       btn("Add photo", async () => { photo = await imageAttachment(); photoStatus.textContent = photo ? "Photo attached" : "No photo attached"; }, "small"),
       photoStatus,
       btn("Add note", async () => {
-        const r = await runAction("note_add", { match: d.match, team: team.value, phase: phase.value, text: text.value, photo });
+        const r = await addMatchNote({ match: d.match, team: team.value, phase: phase.value, text: text.value, photo });
         if (r.ok) { text.value = ""; photo = ""; photoStatus.textContent = "No photo attached"; update({}); }
       }, "primary"),
       h("span", { class: "spacer" }), btn("Save session", saveSession)),
@@ -1488,58 +1907,8 @@ function notesCard(d, update) {
 
 // ---- Settings --------------------------------------------------------------
 function teamStorageSettingsCard() {
-  const storage = window.AutoScoutTeamStorage;
-  const team = h("input", { type:"number", min:1, placeholder:"Team number" });
-  const password = h("input", { type:"password", placeholder:"Shared team password", autocomplete:"current-password" });
-  const registrationKey = h("input", { type:"password", placeholder:"Setup code (only when creating account)" });
-  const status = h("p", { class:"muted small", text: storage && storage.signedIn() ? "Signed in to Team " + storage.currentTeam() : "Not signed in. Local storage continues to work." });
-  const login = btn("Sign in", async () => {
-    try { await storage.login(team.value,password.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Signed in to team storage."); await rerender(); }
-    catch(e){toast(e.message,true);}
-  }, "primary");
-  const register = btn("Create team account", async () => {
-    try { await storage.register(team.value,password.value,registrationKey.value); status.textContent="Signed in to Team "+storage.currentTeam(); toast("Team account created."); await rerender(); }
-    catch(e){toast(e.message,true);}
-  });
-  const signout = btn("Sign out", () => { storage.signOut(); status.textContent="Signed out. Local storage remains available."; toast("Signed out."); rerender(); }, "small");
-  const sync = btn("Upload local notes to team", async () => {
-    try { await syncTeamNotesToCloud(); toast("Notes uploaded to Team "+storage.currentTeam()+"."); }
-    catch(e){toast(e.message,true);}
-  }, "small");
-  const saveCloudSession = btn("Save current session to team", async () => {
-    try {
-      const exported = await act("export", {kind:"session"});
-      if (!exported.ok) throw new Error(exported.message || "Could not export this session.");
-      const slug = (String(S.head && S.head.season || "season") + "_" + String(S.head && S.head.code || "session"))
-        .replace(/[^A-Za-z0-9_-]/g,"_").slice(0,70);
-      const sessionData = JSON.parse(exported.text);
-      sessionData.live_notes = {};
-      sessionData.team_notes = {};
-      await storage.putFile("sessions/" + slug + ".json", sessionData);
-      toast("Session saved to Team " + storage.currentTeam() + ".");
-    } catch(e) { toast(e.message,true); }
-  }, "small");
-  const openCloudSessions = btn("Open shared session", async () => {
-    try {
-      const files = await storage.listFiles();
-      const sessions = files.filter(f => f.path.includes("/sessions/") && f.name.endsWith(".json"));
-      if (!sessions.length) { toast("No shared sessions have been saved yet."); return; }
-      const selected = prompt("Enter the shared session filename:\n" + sessions.map(f=>f.name).join("\n"), sessions[0].name);
-      if (!selected) return;
-      const file = sessions.find(f => f.name === selected.trim());
-      if (!file) { toast("That session filename was not found.", true); return; }
-      const result = await storage.getFile("sessions/" + file.name);
-      const imported = await act("import", {text:JSON.stringify(result.data)});
-      if (!imported.ok) throw new Error(imported.message || "Could not open shared session.");
-      toast("Opened shared session.");
-      await rerender();
-    } catch(e) { toast(e.message,true); }
-  }, "small");
-  return card("Local and team storage",
-    h("p",{class:"muted small",text:"Local mode works without an account. Sign in to your team account to share notes, photos and sessions. Team data is stored in a public GitHub repository and is visible to everyone."}),
-    h("div",{class:"form"},field("Team number",team),field("Team password",password),field("Team setup code",registrationKey)),
-    h("div",{class:"row"},login,register,signout,sync,saveCloudSession,openCloudSessions),status,
-    h("p",{class:"note",text:"Creating accounts requires the registration code configured by the AutoScout administrator. Use a strong shared password. Never reuse a personal password."}));
+  return card("Team account", accountPanel(),
+    h("p", { class: "note", text: "Without an account everything is saved in this browser only. A team account shares scouting notes, photos and sessions between your team's devices. Team data is stored in a public GitHub repository: anyone can read it." }));
 }
 
 RENDER.settings = async () => {
@@ -1588,8 +1957,13 @@ RENDER.settings = async () => {
 // Start up
 // ---------------------------------------------------------------------------
 function bootFailed(msg) {
-  const sp = $("#splash");
-  if (!sp) { toast(msg, true); return; }
+  S.bootError = msg;
+  let sp = $("#splash");
+  if (!sp) {         // the page was already drawn: put the start-up error back in its place
+    sp = h("div", { class: "splash", id: "splash" }, h("img", { src: "assets/logo-56.png", alt: "", width: 56, height: 56 }),
+      h("h1", { text: "FTC AutoScout" }), h("p", { id: "splashText" }));
+    $("#main").replaceChildren(sp);
+  }
   sp.classList.add("err");
   $("#splashText").textContent = "AutoScout could not start.\n" + msg + "\n\nCheck your connection and reload. The first visit needs internet to download the engine.";
   const bar = sp.querySelector(".bar");
@@ -1605,17 +1979,20 @@ async function start() {
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); quickSwitch(); }
   });
+  $("#accountBtn").addEventListener("click", openAccount);
+  updateAccountButton();
+  if (!location.hash) history.replaceState(null, "", "#/overview");
+  window.addEventListener("hashchange", render);
+  // Draw the page now; pages that need the engine wait for it (the worker queues their requests).
+  const boot = call("boot", "boot", {});
+  render().then(() => { if (!S.bootError) document.body.classList.add("app-ready"); });
   try {
-    S.boot = await call("boot", "boot", {});
+    S.boot = await boot;
   } catch (e) {
     bootFailed(e.message);
     return;
   }
   setHead(S.boot.head);
-  window.addEventListener("hashchange", render);
-  if (!location.hash) history.replaceState(null, "", "#/overview");
-  await render();
-  document.body.classList.add("app-ready");
   if (S.boot.restored) toast(`Reopened ${S.boot.restored}.`);
   if ("serviceWorker" in navigator && (location.protocol === "https:" || ["localhost", "127.0.0.1"].includes(location.hostname))) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

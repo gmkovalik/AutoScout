@@ -44,13 +44,25 @@ This is shared-workspace access control, not confidentiality. Do not put private
 
 - `POST /api/register`: `{ team, password, registrationKey }`; team passwords must be at least 12 characters.
 - `POST /api/login`: `{ team, password }`.
-- `GET /api/team/:team/files`: list that team's data files.
+- `GET /api/team/:team/files`: list that team's data files. Add `?folder=sessions` or `?folder=photos` to list a sub-folder.
 - `GET /api/team/:team/files/:path`: read an allowed JSON file.
 - `PUT /api/team/:team/files/:path`: create/update an allowed JSON file. Send the last read ETag as `If-Match` to prevent stale writes.
 - `DELETE /api/team/:team/files/:path`: delete an allowed JSON file, optionally with `If-Match`.
 
 Allowed paths are `match-notes.json`, `team-notes.json`, `sessions/<id>.json`, and `photos/<id>.json`. Each file is limited to 700 KB to stay within the GitHub Contents API's practical limits. Store resized/compressed photo data in the photo JSON file.
 
-## Current implementation boundary
+## How the website uses it
 
-This is the storage service and browser API client foundation. The existing Notes and Save Session screens have **not yet been wired** to call this client. Until that follow-up integration is complete and the Worker is deployed with secrets, AutoScout continues to save locally exactly as it does now. No existing local notes or sessions are migrated or uploaded automatically.
+- **Signing in:** the account button in the top bar (or **Settings > Team account**) opens the sign-in dialog. "New team? Create a team account" asks for the setup code. The sign-in is remembered on that device until the 12-hour token expires or **Sign out** is pressed. An expired or rejected token signs the device out automatically.
+- **Notes:** notes are always saved in the browser's session first, so scouting works offline and without an account. When signed in, each new note is also added to `team-notes.json` or `match-notes.json`, and the Notes pages show the device's notes and the team's shared notes together, each marked **Shared**, **Team** (shared from another device) or **Not shared**. "Share N notes from this device" uploads only the notes the team does not have yet; photos are uploaded once per note. Deleting a shared note removes it for the whole team (after a confirmation).
+- **Match notes** carry an `event` field (`season/code`) so notes from different events with the same match label are kept apart. Notes shared before this field existed show at every event.
+- **Sessions:** "Save session to team" writes `sessions/<season>_<code>.json` and records it in `sessions/index.json`; "Open a team session" lists them from that index.
+- Saves read the file, apply the change and write it back with the file's ETag; if another device saved in between, the change is reapplied to the newer file (up to three tries).
+
+## Deploying this version of the Worker
+
+The website works with the Worker that is already deployed. Redeploying `index.js` adds three improvements:
+
+- the `ETag` header is exposed to the browser, so saves are checked against the version that was read (no silent overwrite when two devices save at the same moment);
+- a save that loses that race returns HTTP 409, which the website retries automatically;
+- `GET /api/team/:team/files?folder=sessions` lists the sessions folder, so sessions saved before `sessions/index.json` existed also appear in "Open a team session".
