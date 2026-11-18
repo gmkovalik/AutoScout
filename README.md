@@ -32,6 +32,7 @@ Changes inside those (new columns, new formulas, new chart options, new text) ne
 | `AutoScout.py` | The desktop app, unchanged. |
 | `worker.js` | Downloads Pyodide 0.29.5 from jsDelivr, loads `AutoScout.py` and runs it in a background thread (a Web Worker) so the page never freezes while an event loads. |
 | `py/tkstub.py` | Stand-ins for tkinter, which browsers don't have, so the desktop file imports. |
+| `py/xpr.py` | XPR, the web version's fourth prediction rating, plugged into the engine at start-up. |
 | `py/webbridge.py` | Runs each desktop page's own `refresh()` against stand-in widgets that record what it writes (table rows, labels, chart series) and hands that to the page as JSON. Also connects the engine's FTCScout client to the browser. |
 | `index.html`, `app.css`, `app.js` | The web interface: the same workspaces (Teams also holds Team Research and My Team), sortable tables, the charts (a port of the desktop chart drawing), dialogs. Plain HTML and JavaScript with no build step. |
 | `sw.js`, `manifest.webmanifest`, `assets/` | Let the site work offline once visited and be added to a phone's home screen like an app. On a slow connection the saved copy is used after 4 seconds while the new one downloads in the background. |
@@ -48,6 +49,7 @@ Network: the first visit downloads the engine (about 7 MB) from jsDelivr. After 
 ## Differences from the desktop app
 
 - **Live Scouting** plays the YouTube stream inside the page, beside the notes. The desktop has to open a separate browser.
+- **XPR, a fourth prediction rating** (Settings > Predictions are based on). It starts each team from its earlier events this season and updates with this event's matches like a regularised OPR; every match is predicted only from the matches before it, so its Analysis record is a real forecast record. Code and explanation: `py/xpr.py`. It is added to the engine at start-up; AutoScout.py is unchanged. A session saved with XPR opens in the desktop app with CAP.
 - **Dark mode**: Settings > Appearance offers Light, Dark or Match this device, remembered per device.
 - **Changes save themselves** (notes, scores, overrides, settings) to the browser. "Save session" is still there.
 - **Competition Day's refresh button** fetches new match results only (a few seconds). The desktop's "Refresh event data" reloads everything, which takes minutes at a big event. A full reload is still on Setup.

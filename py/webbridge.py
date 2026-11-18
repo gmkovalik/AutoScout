@@ -38,6 +38,9 @@ if "subprocess" not in sys.modules:
         sys.modules["subprocess"] = tkstub._StubModule("subprocess")
 
 import AutoScout as A                  # noqa: E402  (the desktop file, unchanged)
+import xpr                             # noqa: E402  (XPR, the web version's fourth rating)
+
+xpr.install(A)
 
 try:
     import js                          # Pyodide: the worker's global scope
@@ -678,6 +681,22 @@ def _note_index() -> dict:
     return {"team_notes": team_notes, "match_notes": match_notes, "sheet_notes": _sheet_notes()}
 
 
+def _with_xpr(table: dict) -> dict:
+    """Add an XPR column (after EPA) to a teams table built from TEAM_COLUMNS."""
+    cols = table.get("columns") or []
+    if any(c.get("key") == "xpr" for c in cols):
+        return table
+    at = next((i + 1 for i, c in enumerate(cols) if c.get("key") == "epa"), len(cols))
+    table["columns"] = cols[:at] + [{"key": "xpr", "label": "XPR", "align": "e"}] + cols[at:]
+    rows = []
+    for iid, vals, tags in table.get("rows") or []:
+        t = APP.session.teams.get(int(iid)) if str(iid).isdigit() else None
+        v = getattr(t, "xpr", None) if t is not None else None
+        rows.append([iid, list(vals[:at]) + ["" if v is None else f"{v:.1f}"] + list(vals[at:]), tags])
+    table["rows"] = rows
+    return table
+
+
 def view_pick(o):
     """Team Page > Pick List: the team stats table and, for my team, the engine's
     prediction with every possible partner (the Alliances tab's partner table)."""
@@ -687,7 +706,7 @@ def view_pick(o):
     alli = probe(A.AlliancesTab, only_var=Rec(False))
     alli.refresh()
     return {"loaded": bool(s.teams), "event": s.event_name, "my_team": s.my_team, "basis": s.settings.basis,
-            "teams": _table(teams.tree, A.TEAM_COLUMNS),
+            "teams": _with_xpr(_table(teams.tree, A.TEAM_COLUMNS)),
             "partners": _table(alli.partner_tree, A.PARTNER_COLUMNS),
             "partners_status": alli.status_var.get(), "bar": alli.bar_var.get(),
             "notes": _note_index()}
@@ -696,7 +715,7 @@ def view_pick(o):
 def view_teams(o):
     p = probe(A.TeamsTab, _editing=0, _panel_added=False)
     p.refresh()
-    out = {"table": _table(p.tree, A.TEAM_COLUMNS), "notes": _note_index()}
+    out = {"table": _with_xpr(_table(p.tree, A.TEAM_COLUMNS)), "notes": _note_index()}
     team = int(o.get("team") or 0)
     if team and team in APP.session.teams:
         p._on_select(str(team))
@@ -1357,7 +1376,7 @@ def boot() -> str:
         "version": A.__version__, "name": A.APP_FULL_TITLE, "tagline": A.APP_TAGLINE, "org": A.APP_ORG_FULL,
         "website": A.APP_WEBSITE, "blurb": A.APP_BLURB, "restored": restored,
         "tdc_issues": list(A.TDC_ISSUES), "focus_modes": list(A.FOCUS_MODES),
-        "cap_help": A.CAP_EXPLAINER + "\n" + A.RATING_EXPLAINER, "charts_guide": A.CHARTS_GUIDE,
+        "cap_help": A.CAP_EXPLAINER + "\n" + A.RATING_EXPLAINER + "\n" + xpr.EXPLAINER, "charts_guide": A.CHARTS_GUIDE,
         "head": _head()}))
 
 

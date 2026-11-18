@@ -2483,9 +2483,9 @@ RENDER.settings = async () => {
           h("button", { type: "button", class: choice === k ? "on" : "", role: "radio", "aria-checked": choice === k ? "true" : "false", onclick: () => setTheme(k) }, lab))),
       h("p", { class: "note", text: "Dark mode is easier on the eyes in a dark venue and saves battery on many phones. Saved on this device." })),
     card("Predictions are based on",
-      h("div", { class: "row" }, h("div", { class: "seg", role: "radiogroup" }, [["CAP", "CAP (AutoScout's own rating)"], ["OPR", "OPR (non-penalty)"], ["EPA", "EPA (learns match by match)"]].map(([k, lab]) =>
+      h("div", { class: "row" }, h("div", { class: "seg", role: "radiogroup" }, [["CAP", "CAP (AutoScout's own rating)"], ["OPR", "OPR (non-penalty)"], ["EPA", "EPA (learns match by match)"], ["XPR", "XPR (prior + this event, new)"]].map(([k, lab]) =>
         h("button", { type: "button", class: d.rating === k ? "on" : "", role: "radio", "aria-checked": d.rating === k ? "true" : "false", onclick: () => apply({ rating: k }) }, lab))),
-      btn("What do CAP, OPR and EPA mean?", () => infoDialog("CAP, OPR and EPA", S.boot.cap_help), "small")),
+      btn("What do CAP, OPR, EPA and XPR mean?", () => infoDialog("CAP, OPR, EPA and XPR", S.boot.cap_help), "small")),
       h("p", { class: "note", text: "The per-team number that is added up for each alliance: it drives the match predictions, the accuracy count, projected standings and every alliance table." }),
       h("div", { class: "row" }, check("EPA keeps learning from this event's played matches", d.epa_live, (v) => apply({ epa_live: v })),
         h("span", { text: "k max ×mean" }), k0, h("span", { text: "k min ×mean" }), kmin),
