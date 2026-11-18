@@ -46,12 +46,15 @@ function equal(a, b) {
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
 }
-async function passwordVerifier(password, salt, pepper) {
+// Cloudflare Workers support at most 100,000 PBKDF2 iterations. The server-only
+// pepper (AUTH_PEPPER) means the public verifier can't be attacked offline without it.
+const PBKDF2_ITERATIONS = 100000;
+async function passwordVerifier(password, salt, pepper, iterations = PBKDF2_ITERATIONS) {
   const material = await crypto.subtle.importKey(
     "raw", encoder.encode(password + ":" + pepper), "PBKDF2", false, ["deriveBits"]
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: fromB64url(salt), iterations: 310000 },
+    { name: "PBKDF2", hash: "SHA-256", salt: fromB64url(salt), iterations },
     material, 256
   );
   return b64url(new Uint8Array(bits));
@@ -185,7 +188,7 @@ export default {
         const salt = b64url(crypto.getRandomValues(new Uint8Array(16)));
         const verifier = await passwordVerifier(password, salt, env.AUTH_PEPPER);
         await putGithubFile(env, path, JSON.stringify({
-          schema: 1, team, password: { algorithm: "PBKDF2-SHA256", iterations: 310000, salt, verifier },
+          schema: 1, team, password: { algorithm: "PBKDF2-SHA256", iterations: PBKDF2_ITERATIONS, salt, verifier },
           createdAt: new Date().toISOString(),
         }, null, 2), null, "Create AutoScout team account " + team);
         return json({ ok: true, token: await issueToken(team, env.AUTH_PEPPER), team }, 201, headers);
@@ -198,7 +201,11 @@ export default {
         const account = await getGithubFile(env, "teams/" + team + "/account.json");
         if (!account) return json({ error: "Team account not found." }, 404, headers);
         const record = JSON.parse(account.text);
-        const actual = await passwordVerifier(String(body.password || ""), record.password.salt, env.AUTH_PEPPER);
+        const iterations = Number(record.password.iterations) || PBKDF2_ITERATIONS;
+        if (iterations > PBKDF2_ITERATIONS) {
+          return json({ error: "This team account was created with settings this server can't check. Ask the AutoScout administrator to delete teams/" + team + "/account.json in the data repository, then create the account again." }, 409, headers);
+        }
+        const actual = await passwordVerifier(String(body.password || ""), record.password.salt, env.AUTH_PEPPER, iterations);
         if (!equal(encoder.encode(actual), encoder.encode(record.password.verifier))) {
           return json({ error: "Incorrect team number or password." }, 401, headers);
         }
