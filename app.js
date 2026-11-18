@@ -387,7 +387,7 @@ const C = { padL: 62, padR: 18, padT: 34, padB: 48, grid: "#e6e9f0", axis: "#8a9
 const CHART_LIGHT = { grid: "#e6e9f0", axis: "#8a93a6", text: "#182236", muted: "#6b7280", bg: "#fff", brand: "#5d081f" };
 const CHART_DARK = { grid: "#2b303a", axis: "#6b7383", text: "#e5e7ec", muted: "#9ca3b0", bg: "#1a1d24", brand: "#f19bb0" };
 const measureCtx = document.createElement("canvas").getContext("2d");
-function textW(s, px = 11, weight = "400") { measureCtx.font = `${weight} ${px}px Roboto, Arial, sans-serif`; return measureCtx.measureText(s).width; }
+function textW(s, px = 11, weight = "400") { measureCtx.font = `${weight} ${px}px IBM Plex Sans, Arial, sans-serif`; return measureCtx.measureText(s).width; }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function niceTicks(lo, hi, n = 5) {
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) return [0, 1];
@@ -555,7 +555,7 @@ function chartView(c, opts = {}) {
     size = [w, H];
     const b = buildChart(c, w, H);
     screen = b.screen;
-    box.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" font-family="Roboto, Arial, sans-serif" role="img" aria-label="${esc((c && c.title) || "chart")}">${b.svg}<circle class="ring" r="8" fill="none" stroke="${isDark() ? "#f19bb0" : "#5d081f"}" stroke-width="2" visibility="hidden"/></svg>`;
+    box.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" font-family="IBM Plex Sans, Arial, sans-serif" role="img" aria-label="${esc((c && c.title) || "chart")}">${b.svg}<circle class="ring" r="8" fill="none" stroke="${isDark() ? "#f19bb0" : "#5d081f"}" stroke-width="2" visibility="hidden"/></svg>`;
     box.append(tip);
   }
   function nearest(ev) {
@@ -599,7 +599,7 @@ function chartView(c, opts = {}) {
 function saveChartPng(c, name) {
   const w = 1200, H = 700;
   const b = buildChart(c, w, H);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" font-family="Roboto, Arial, sans-serif">${b.svg}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" font-family="IBM Plex Sans, Arial, sans-serif">${b.svg}</svg>`;
   const img = new Image();
   img.onload = () => {
     const cv = document.createElement("canvas");
