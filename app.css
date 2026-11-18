@@ -24,7 +24,8 @@
   --blue: #2f6fdb;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(24, 34, 54, .06), 0 2px 8px rgba(24, 34, 54, .04);
-  --font: "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -245,7 +246,7 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .dialog .close { float: right; margin: -6px -6px 0 0; }
 .dialog .close { min-width: 38px; min-height: 38px; font-size: 17px; padding: 7px 10px; }
-.dialog pre { white-space: pre-wrap; font: 13.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--row-alt); padding: 12px; border-radius: 8px; margin: 0; overflow-wrap: anywhere; }
+.dialog pre { white-space: pre-wrap; font: 13.5px/1.45 var(--mono); background: var(--row-alt); padding: 12px; border-radius: 8px; margin: 0; overflow-wrap: anywhere; }
 .switchlist { display: flex; flex-direction: column; margin-top: 8px; max-height: 50vh; overflow: auto; }
 .switchlist button { text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 7px; cursor: pointer; }
 .switchlist button.on, .switchlist button:hover { background: var(--brand-tint); color: var(--brand-text); }
