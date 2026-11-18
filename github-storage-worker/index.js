@@ -24,6 +24,7 @@ function cors(request, env) {
     "access-control-allow-origin": origin || allowed[0],
     "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
     "access-control-allow-headers": "Content-Type,Authorization,If-Match",
+    "access-control-expose-headers": "ETag",
     "access-control-max-age": "86400",
     "vary": "Origin",
   };
@@ -198,7 +199,9 @@ export default {
           return json({ error: "Sign in to this team account first." }, 401, headers);
         }
         if (parts[3] === "files" && parts.length === 4 && request.method === "GET") {
-          const response = await fetch(repoPath(env, "teams/" + team), { headers: githubHeaders(env) });
+          const folder = url.searchParams.get("folder") || "";
+          if (folder && !/^(sessions|photos)$/.test(folder)) return json({ error: "That folder is not allowed." }, 400, headers);
+          const response = await fetch(repoPath(env, "teams/" + team + (folder ? "/" + folder : "")), { headers: githubHeaders(env) });
           if (response.status === 404) return json({ files: [] }, 200, headers);
           if (!response.ok) throw new Error("GitHub list failed: " + response.status);
           const entries = await response.json();
@@ -235,7 +238,8 @@ export default {
       }
       return json({ error: "Not found." }, 404, headers);
     } catch (error) {
-      return json({ error: String(error && error.message || error).slice(0, 300) }, 400, headers);
+      const message = String(error && error.message || error).slice(0, 300);
+      return json({ error: message }, /changed on another device/i.test(message) ? 409 : 400, headers);
     }
   },
 };

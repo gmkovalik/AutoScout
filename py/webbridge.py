@@ -1091,11 +1091,12 @@ def act_note_add(a):
     photo = str(a.get("photo") or "")
     if photo and (not photo.startswith("data:image/") or len(photo) > 5_500_000):
         return {"ok": False, "message": "Choose an image under 4 MB."}
-    s.live_notes.setdefault(label, []).append({"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                               "team": team, "phase": a.get("phase") or "Overall",
-                                               "text": text, "photo": photo})
+    note = {"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "team": team, "phase": a.get("phase") or "Overall", "text": text, "photo": photo}
+    s.live_notes.setdefault(label, []).append(note)
     _autosave()
-    return {"ok": True, "message": f"Added scouting note for {label}."}
+    return {"ok": True, "message": f"Added scouting note for {label}.",
+            "note": {k: v for k, v in note.items() if k != "photo"}}
 
 
 
@@ -1110,11 +1111,11 @@ def act_team_note_add(a):
     if photo and (not photo.startswith("data:image/") or len(photo) > 5_500_000):
         return {"ok": False, "message": "Choose an image under 4 MB."}
     import datetime
-    APP.session.team_notes.setdefault(team, []).append({
-        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "text": text, "photo": photo})
+    note = {"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "text": text, "photo": photo}
+    APP.session.team_notes.setdefault(team, []).append(note)
     _autosave()
-    return {"ok": True, "message": f"Saved team note for {team}."}
+    return {"ok": True, "message": f"Saved team note for {team}.",
+            "note": {"team": team, "time": note["time"], "text": text}}
 
 
 def act_team_note_delete(a):

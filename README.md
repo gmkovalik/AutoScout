@@ -34,11 +34,16 @@ Changes inside those (new columns, new formulas, new chart options, new text) ne
 | `py/tkstub.py` | Stand-ins for tkinter, which browsers don't have, so the desktop file imports. |
 | `py/webbridge.py` | Runs each desktop page's own `refresh()` against stand-in widgets that record what it writes (table rows, labels, chart series) and hands that to the page as JSON. Also connects the engine's FTCScout client to the browser. |
 | `index.html`, `app.css`, `app.js` | The web interface: the same 14 workspaces, sortable tables, the charts (a port of the desktop chart drawing), dialogs. Plain HTML and JavaScript with no build step. |
-| `sw.js`, `manifest.webmanifest`, `assets/` | Let the site work offline once visited and be added to a phone's home screen like an app. |
+| `sw.js`, `manifest.webmanifest`, `assets/` | Let the site work offline once visited and be added to a phone's home screen like an app. On a slow connection the saved copy is used after 4 seconds while the new one downloads in the background. |
+| `github-storage-worker/` | Optional team accounts: the Cloudflare Worker (`index.js`) and the browser client (`client.js`). |
+
+Start-up: the page appears straight away and the engine starts behind it; pages that need the engine show a progress card until it is ready. AutoScout.py's compiled bytecode is kept in the browser and reused while the file is unchanged, which saves most of the start-up time after the first visit.
+
+Team accounts (optional): the account button in the top bar signs in to a shared team account, which shares scouting notes, photos and sessions between the team's devices. Notes are still saved on the device first, so everything works offline and without an account. See `github-storage-worker/README.md`.
 
 Storage: sessions are saved in the browser (IndexedDB), in exactly the JSON format the desktop app uses. **Setup > Download session file** and **Open session file** move a session between the website, the desktop app and other devices. The FTCScout cache is kept in the browser too.
 
-Network: the first visit downloads the engine (about 7 MB) from jsDelivr. After that the site talks only to the FTCScout API (and YouTube if you use the video player). There is no server, account or tracking; scouting notes never leave the device unless you download the session file.
+Network: the first visit downloads the engine (about 7 MB) from jsDelivr. After that the site talks only to the FTCScout API (and YouTube if you use the video player). There is no tracking. Without a team account, scouting notes never leave the device unless you download the session file; with one, notes you share are stored in the team's public data repository.
 
 ## Differences from the desktop app
 

@@ -119,7 +119,7 @@ p { margin: 0 0 8px; }
 .btn:disabled { opacity: .5; cursor: default; }
 label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--muted); min-width: 0; }
 label.field > span { white-space: nowrap; }
-input[type=text], input[type=number], input[type=search], input[type=url], select, textarea {
+input[type=text], input[type=number], input[type=search], input[type=url], input[type=password], select, textarea {
   min-height: 38px; padding: 7px 10px; border: 1px solid #cfd5df; border-radius: 8px; background: #fff; color: var(--text);
   font-size: 16px; /* 16px stops iOS zooming into the field */ max-width: 100%;
 }
@@ -735,4 +735,83 @@ body:not(.app-ready) .site-footer { display: none; }
   .notes-main-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .notes-main-tabs .btn { min-width: 0; width: 100%; padding: 10px 8px; }
   .note-photo { max-height: 260px; }
+}
+
+/* ---------- start-up: page shown while the engine starts ---------- */
+.progress.indeterminate > div { width: 35%; animation: slide 1.2s ease-in-out infinite; }
+.engine-wait .row { align-items: center; }
+.engine-line { margin: -4px 0 12px; }
+
+/* ---------- team account ---------- */
+.account-btn { display: inline-flex; align-items: center; gap: 7px; }
+.account-btn[hidden] { display: none; }
+.account-dot, .sync-dot { width: 9px; height: 9px; border-radius: 50%; background: #9aa3b2; flex: none; display: inline-block; }
+.account-btn .account-dot { background: rgba(255,255,255,.55); }
+.account-btn.on .account-dot, .sync-dot { background: #3fb36b; box-shadow: 0 0 0 3px rgba(63,179,107,.18); }
+.sync-dot.off { background: #9aa3b2; box-shadow: none; }
+.sync-dot.bad { background: var(--red); box-shadow: 0 0 0 3px rgba(192,57,43,.15); }
+.account-panel p { margin: 0 0 8px; }
+.account-status { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.account-status > div { display: flex; flex-direction: column; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.signin-form { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.signin-form .foot { align-items: center; }
+.signin-form [hidden] { display: none; }
+.signin-form .status { margin: 0; }
+.signin-form .status:empty { display: none; }
+.signin-form .foot { margin-top: 4px; }
+.linkbtn { background: none; border: 0; padding: 4px 0; color: var(--brand); font: inherit; font-size: 14px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn.strong { font-weight: 700; text-decoration: none; font-size: inherit; padding: 0; }
+.linkbtn.strong:hover { text-decoration: underline; }
+
+/* ---------- notes: sharing status ---------- */
+.sync-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 9px 12px; margin-bottom: 12px; box-shadow: var(--shadow); font-size: 14px; }
+.sync-bar .sync-text { flex: 1 1 220px; min-width: 0; }
+.sync-bar.err { border-color: #f0c4c0; background: #fff7f6; }
+.note-badge { font-size: 11px; font-weight: 700; letter-spacing: .3px; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.note-badge.shared { background: #e3f3e8; color: #23683d; }
+.note-badge.local { background: #fff1d6; color: #8a4b00; }
+.note-photo-slot { margin-top: 8px; padding: 18px 12px; border: 1px dashed var(--border); border-radius: 8px; max-width: 440px; text-align: center; }
+.notes-filter { align-items: flex-end; margin-bottom: 10px; }
+.notes-filter .field.wide { flex: 1 1 220px; }
+.combo { display: flex; }
+.combo input { width: 100%; }
+.account-btn .account-icon { display: none; }
+@media (max-width: 860px) {
+  .account-btn { position: relative; padding-left: 9px; padding-right: 9px; }
+  .account-btn .account-icon { display: block; }
+  .account-btn .account-dot { position: absolute; right: 5px; top: 5px; width: 8px; height: 8px; }
+  .account-btn:not(.on) .account-dot { display: none; }
+}
+@media (max-width: 600px) {
+  .sync-bar .btn { flex: 1 1 auto; }
+}
+
+/* ---------- FTC AutoScout wordmark ---------- */
+.wordmark {
+  font-weight: 900;
+  font-size: 19px;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  color: #ffffff;
+}
+
+.wordmark .ftc {
+  font-weight: 900;
+  color: #ffffff;
+  opacity: 1;
+}
+
+.wordmark .autoscout {
+  font-weight: 900;
+  font-style: italic;
+  color: #ffffff;
+  opacity: 1;
+}
+
+@media (max-width: 380px) {           /* the smallest phones: keep the wordmark clear of the buttons */
+  .wordmark { font-size: 15px; }
+  .brand img { width: 28px; height: 28px; }
+  .topactions { gap: 6px; }
 }
