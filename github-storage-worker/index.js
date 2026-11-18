@@ -90,6 +90,8 @@ function githubHeaders(env) {
     "accept": "application/vnd.github+json",
     "content-type": "application/json",
     "x-github-api-version": "2022-11-28",
+    // GitHub refuses API requests without a User-Agent (HTTP 403), and Cloudflare Workers don't send one.
+    "user-agent": "AutoScout-team-storage",
   };
 }
 function repoPath(env, path) {
