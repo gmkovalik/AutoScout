@@ -645,6 +645,28 @@ def _team_phase_chart(team: int, season: int, event_code: str, scope: str) -> di
             "note": "Alliance phase totals for matches this team played, not individual robot contributions."}
 
 
+def _sheet_notes() -> dict:
+    """The "Note" typed on each team's sheet (the Technical Issues editor), by team."""
+    out = {}
+    for team, m in (getattr(APP.session, "manual", None) or {}).items():
+        text = str(getattr(m, "note", "") or "").strip()
+        if text:
+            out[str(team)] = text
+    return out
+
+
+def _team_notes_for(team: str) -> list:
+    rows = APP.session.team_notes.get(str(team), [])
+    return [{"team": str(team), "time": str(n.get("time") or ""), "text": str(n.get("text") or ""),
+             "photo": str(n.get("photo") or ""), "index": i} for i, n in enumerate(rows)]
+
+
+def view_team_notes(o):
+    """The team notes for one team, for the team sheet."""
+    team = str(o.get("team") or "")
+    return {"team": team, "notes": _team_notes_for(team), "sheet_note": _sheet_notes().get(team, "")}
+
+
 def _note_index() -> dict:
     """Every scouting note in the session, without photos: enough to count notes per team."""
     s = APP.session
@@ -653,7 +675,7 @@ def _note_index() -> dict:
     match_notes = [{"match": str(label), "time": str(n.get("time") or ""), "team": str(n.get("team") or "General"),
                     "phase": str(n.get("phase") or "Overall"), "text": str(n.get("text") or "")}
                    for label, rows in s.live_notes.items() for n in rows]
-    return {"team_notes": team_notes, "match_notes": match_notes}
+    return {"team_notes": team_notes, "match_notes": match_notes, "sheet_notes": _sheet_notes()}
 
 
 def view_pick(o):
@@ -722,7 +744,7 @@ def view_notes(o):
     return {"loaded": bool(s.matches), "event": s.event_name, "season": s.season,
             "matches": matches, "note_count": sum(len(row["notes"]) for row in matches),
             "team_options": [str(n) for n in sorted(set(s.team_numbers) | set(s.extra_teams))],
-            "team_notes": team_notes}
+            "team_notes": team_notes, "sheet_notes": _sheet_notes()}
 
 
 def _team_panel(team: int, o: dict) -> dict:
@@ -914,7 +936,7 @@ def view_settings(o):
 
 
 VIEWS = {"overview": view_overview, "competition": view_competition, "setup": view_setup,
-         "teams": view_teams, "notes": view_notes, "pick": view_pick, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
+         "teams": view_teams, "notes": view_notes, "pick": view_pick, "team_notes": view_team_notes, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
          "standings": view_standings, "alliances": view_alliances, "winrate": view_winrate,
          "analysis": view_analysis, "charts": view_charts, "live": view_live,
          "research": view_research, "settings": view_settings}
