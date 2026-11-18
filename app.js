@@ -150,7 +150,7 @@ const PAGES = [
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Look up any team: stats, notes, research and the event team list"],
     ["notes", "Notes", "✎", "Match notes and team notes"],
-    ["teampage", "Team Page", "◎", "Your account's pick list and team chat"]]],
+    ["teampage", "Team Page", "\u2302", "Your account's pick list and team chat"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
     ["alliances", "Alliances", "◇", "Alliance selection workspace"],
     ["winrate", "Win Rate Curve", "⌁", "Alliance win-rate modeling"],
@@ -161,6 +161,18 @@ const PAGES = [
 const PAGE = {};
 for (const [, items] of PAGES) for (const [id, title, icon, ctx] of items) PAGE[id] = { id, title, icon, ctx };
 
+// Menu icons drawn as SVG (the rest are text symbols). Team Page: a house.
+const NAV_SVG = { teampage: "M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-5.5h3V20h5V9.5" };
+function navSvg(d) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "ic ic-svg"); svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", d); path.setAttribute("fill", "none"); path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "2"); path.setAttribute("stroke-linejoin", "round"); path.setAttribute("stroke-linecap", "round");
+  svg.append(path);
+  return svg;
+}
 function buildNav() {
   const nav = $("#nav");
   nav.textContent = "";
@@ -168,7 +180,7 @@ function buildNav() {
     nav.append(h("div", { class: "navgroup" + (group === "TOOLS" ? " tools" : "") }, h("h4", { text: group }),
       h("div", { class: "items" }, items.map(([id, title, icon]) =>
         h("a", { class: "navlink", href: "#/" + id, "data-page": id, onclick: closeMenu },
-          h("span", { class: "ic", "aria-hidden": "true", text: icon }), title)))));
+          NAV_SVG[id] ? navSvg(NAV_SVG[id]) : h("span", { class: "ic", "aria-hidden": "true", text: icon }), title)))));
   }
 }
 function markNav() {
@@ -866,10 +878,14 @@ async function saveSession() {
 // list; its quick look shows everything we know: stats at this event, its matches,
 // scouting notes, the Technical Issues editor, charts, league standings and its
 // public season record. Below: every team at the loaded event.
+// Two sub-tabs: "Team Look-up" (#/teams, #/teams?team=N) and "Team List" (#/teams?tab=list).
 RENDER.teams = async (params) => {
   const headTeam = () => (S.head && S.head.my_team ? Number(S.head.my_team) : 0);
+  const listTab = params.tab === "list";
   const picked = /^\d+$/.test(String(params.team || "").trim()) ? Number(params.team) : 0;
-  const focus = picked || (params.team === "none" ? 0 : headTeam());   // nothing picked: show your own team
+  if (picked) S.teamsLast = picked;
+  if (params.team === "none") S.teamsLast = 0;
+  const focus = listTab ? 0 : (picked || (params.team === "none" ? 0 : headTeam()));   // nothing picked: your own team
   const [d, , mine] = await Promise.all([
     view("teams", { ...S.panel, team: focus, extras: false }),
     fetchCloudNotes(),
@@ -878,14 +894,20 @@ RENDER.teams = async (params) => {
   const counts = noteCountsByTeam(d.notes);
   const table = withNotesColumn(d.table, counts);
   const statsOf = new Map(table.rows.map(([iid, vals]) => [String(iid), Object.fromEntries(table.columns.map((c, i) => [c.key, vals[i]]))]));
-  if (focus && focus !== S.teamsShown) {        // a new team was picked: bring its quick look into view
-    afterRender.push(() => { const el = document.getElementById("teamQuickLook"); if (el && window.scrollY > el.offsetTop) el.scrollIntoView({ block: "start" }); });
-  }
-  S.teamsShown = focus;
+  const shownKey = (listTab ? "list" : "look") + focus;
+  if (shownKey !== S.teamsShown) afterRender.push(() => window.scrollTo(0, 0));   // new tab or new team: start at the top
+  S.teamsShown = shownKey;
+  const lastTeam = listTab ? (S.teamsLast || headTeam()) : focus;
+  const tabs = h("div", { class: "notes-main-tabs", role: "tablist" },
+    btn(lastTeam ? `Team Look-up · ${lastTeam}` : "Team Look-up",
+      () => go("teams", S.teamsLast ? { team: S.teamsLast } : undefined), listTab ? "" : "primary"),
+    btn(`Team List${table.rows.length ? ` (${table.rows.length})` : ""}`, () => go("teams", { tab: "list" }), listTab ? "primary" : ""));
+  if (listTab) return [tabs, teamListCard(table, counts, S.teamsLast || 0)];
   return [
+    tabs,
     teamLookupCard(focus, myTeam),
-    focus ? teamQuickLook(focus, d, mine, statsOf.get(String(focus)), counts[String(focus)] || 0, myTeam, !picked) : null,
-    teamListCard(table, counts, focus),
+    focus ? teamQuickLook(focus, d, mine, statsOf.get(String(focus)), counts[String(focus)] || 0, myTeam, !picked) :
+      card("No team selected", h("p", { class: "muted", text: "Look up a team above, or choose one on the Team List tab." })),
   ];
 };
 
@@ -920,7 +942,7 @@ function teamLookupCard(focus, myTeam) {
       btn("Look up", search, "primary"),
       myTeam && focus !== myTeam ? btn(`My team (${myTeam})`, () => go("teams", { team: myTeam }), "small") : null),
     status, results,
-    h("p", { class: "note", text: "Any FTC team works, not only the teams at the loaded event. Or choose a team in the list below." }));
+    h("p", { class: "note", text: "Any FTC team works, not only the teams at the loaded event. Or choose a team on the Team List tab." }));
 }
 
 function teamQuickLook(team, d, mine, stats, noteCount, myTeam, isDefault) {
@@ -1050,7 +1072,7 @@ function teamListCard(table, counts, focus) {
   for (const [f, label] of filters) seg.append(h("button", { type: "button", role: "radio", "data-f": f, onclick: () => { S.teamsNoteFilter = f; draw(); } }, label));
   draw();
   return card(`Teams at ${(S.head && S.head.event) || "the loaded event"}`,
-    h("p", { class: "muted small", text: "Choose a team to open its quick look at the top of the page." }),
+    h("p", { class: "muted small", text: "Choose a team to open it on the Team Look-up tab." }),
     table.rows.length ? h("div", { class: "row teams-filter" }, seg,
       h("span", { class: "muted small" }, h("span", { class: "notes-yes legend" }, "3"), " = scouting notes on this team",
         teamOn() ? ` (this device + ${accountName()})` : "")) : null,
