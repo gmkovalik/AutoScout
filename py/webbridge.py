@@ -38,14 +38,46 @@ if "subprocess" not in sys.modules:
         sys.modules["subprocess"] = tkstub._StubModule("subprocess")
 
 import AutoScout as A                  # noqa: E402  (the desktop file, unchanged)
-import xpr                             # noqa: E402  (XPR, the web version's fourth rating)
-
-xpr.install(A)
-
 try:
     import js                          # Pyodide: the worker's global scope
 except ImportError:                    # plain Python (tests)
     js = None
+
+
+def _load_xpr():
+    """XPR (the web version's fourth rating, py/xpr.py). Never stops AutoScout starting:
+    if an older cached worker.js didn't download xpr.py, fetch it here; if that fails too,
+    carry on without XPR (CAP, OPR and EPA work as before)."""
+    try:
+        import xpr as mod
+        return mod
+    except ImportError:
+        pass
+    try:
+        if js is not None:
+            req = js.XMLHttpRequest.new()
+            req.open("GET", "py/xpr.py", False)        # relative to worker.js
+            req.send(None)
+            if int(req.status) == 200:
+                here = os.path.dirname(os.path.abspath(__file__))
+                with open(os.path.join(here, "xpr.py"), "w", encoding="utf-8") as f:
+                    f.write(str(req.responseText))
+                import importlib
+                importlib.invalidate_caches()
+                import xpr as mod
+                return mod
+    except Exception as e:                            # noqa: BLE001
+        print("XPR not available:", e)
+    return None
+
+
+xpr = _load_xpr()
+if xpr is not None:
+    try:
+        xpr.install(A)
+    except Exception as e:                            # noqa: BLE001
+        print("XPR could not be added:", e)
+        xpr = None
 
 HOME = os.path.expanduser("~")
 SESSIONS_DIR = os.path.join(A.default_cache_dir(), "web_sessions")
@@ -684,7 +716,7 @@ def _note_index() -> dict:
 def _with_xpr(table: dict) -> dict:
     """Add an XPR column (after EPA) to a teams table built from TEAM_COLUMNS."""
     cols = table.get("columns") or []
-    if any(c.get("key") == "xpr" for c in cols):
+    if xpr is None or any(c.get("key") == "xpr" for c in cols):
         return table
     at = next((i + 1 for i, c in enumerate(cols) if c.get("key") == "epa"), len(cols))
     table["columns"] = cols[:at] + [{"key": "xpr", "label": "XPR", "align": "e"}] + cols[at:]
@@ -1376,7 +1408,7 @@ def boot() -> str:
         "version": A.__version__, "name": A.APP_FULL_TITLE, "tagline": A.APP_TAGLINE, "org": A.APP_ORG_FULL,
         "website": A.APP_WEBSITE, "blurb": A.APP_BLURB, "restored": restored,
         "tdc_issues": list(A.TDC_ISSUES), "focus_modes": list(A.FOCUS_MODES),
-        "cap_help": A.CAP_EXPLAINER + "\n" + A.RATING_EXPLAINER + "\n" + xpr.EXPLAINER, "charts_guide": A.CHARTS_GUIDE,
+        "cap_help": A.CAP_EXPLAINER + "\n" + A.RATING_EXPLAINER + ("\n" + xpr.EXPLAINER if xpr else ""), "charts_guide": A.CHARTS_GUIDE,
         "head": _head()}))
 
 

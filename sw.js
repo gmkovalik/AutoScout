@@ -22,7 +22,12 @@ self.addEventListener("activate", (e) => {
 
 function networkFirst(e) {
   const req = e.request;
-  const network = fetch(req).then((res) => {
+  // Always check with the server (a cheap "not modified" if unchanged) instead of the browser's
+  // 10-minute copy, so every file of a new version arrives together.
+  const fresh = req.mode === "navigate"                 // a page load can't be re-made with options
+    ? new Request(req.url, { cache: "no-cache", credentials: "same-origin" })
+    : new Request(req, { cache: "no-cache" });
+  const network = fetch(fresh).then((res) => {
     if (res.ok) { const copy = res.clone(); e.waitUntil(caches.open(CACHE).then((c) => c.put(req, copy))); }
     return res;
   });
