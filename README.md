@@ -33,7 +33,7 @@ Changes inside those (new columns, new formulas, new chart options, new text) ne
 | `worker.js` | Downloads Pyodide 0.29.5 from jsDelivr, loads `AutoScout.py` and runs it in a background thread (a Web Worker) so the page never freezes while an event loads. |
 | `py/tkstub.py` | Stand-ins for tkinter, which browsers don't have, so the desktop file imports. |
 | `py/webbridge.py` | Runs each desktop page's own `refresh()` against stand-in widgets that record what it writes (table rows, labels, chart series) and hands that to the page as JSON. Also connects the engine's FTCScout client to the browser. |
-| `index.html`, `app.css`, `app.js` | The web interface: the same 14 workspaces, sortable tables, the charts (a port of the desktop chart drawing), dialogs. Plain HTML and JavaScript with no build step. |
+| `index.html`, `app.css`, `app.js` | The web interface: the same workspaces (Teams also holds Team Research and My Team), sortable tables, the charts (a port of the desktop chart drawing), dialogs. Plain HTML and JavaScript with no build step. |
 | `sw.js`, `manifest.webmanifest`, `assets/` | Let the site work offline once visited and be added to a phone's home screen like an app. On a slow connection the saved copy is used after 4 seconds while the new one downloads in the background. |
 | `github-storage-worker/` | Optional team accounts: the Cloudflare Worker (`index.js`) and the browser client (`client.js`). |
 
@@ -79,7 +79,7 @@ Measured in Chrome (desktop window and iPhone 12-size phone emulation) and in We
 - A 15-team league meet (USTXCLRM1, 2025) loads live from FTCScout in about 10 seconds.
 - The 57-team 2025 World Championship Jackson division loads live, with every team's season history, in 87 seconds, and gives the same results as the desktop engine: 96 of 138 matches called correctly by CAP.
 - With the network switched off after one visit, the site, the engine and the saved session all open from the browser's copy, and every page works.
-- All 14 workspaces open with no script errors. Pages fit a phone screen with no sideways scrolling; wide tables scroll inside their own box.
+- All workspaces open with no script errors. Pages fit a phone screen with no sideways scrolling; wide tables scroll inside their own box.
 - Tables sort, the team sheet's edits and data overrides apply, typed match scores apply and clear, the rating basis switches between CAP, OPR and EPA, scouting notes add and delete, team research and search work, and the session reopens after a reload.
 
 Not tested yet: a real iPhone or Android phone (only the engines at phone size), Windows browsers, and Firefox.

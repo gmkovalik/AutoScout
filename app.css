@@ -869,3 +869,33 @@ button.note-badge { border: 0; cursor: pointer; font-family: inherit; }
   .chat-compose .chat-name { grid-column: 1 / -1; }
   .chat-log { height: 55vh; }
 }
+
+/* ---------- Teams: one-team quick look ---------- */
+.team-lookup { align-items: flex-end; }
+.team-lookup .field.wide { flex: 1 1 280px; }
+.team-search-results { max-height: 260px; margin-top: 8px; }
+.team-look { scroll-margin-top: 70px; }
+.team-look-head { border-top: 4px solid var(--brand); scroll-margin-top: 70px; }
+.team-look-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.team-look-title .kicker { font-size: 11.5px; letter-spacing: 1px; font-weight: 700; color: var(--muted); }
+.team-look-title h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 2px 0 0; }
+.team-look-title h2 .num { font-size: 28px; font-weight: 900; color: var(--brand); }
+.team-look-title h2 .nm { font-size: 19px; font-weight: 500; }
+.team-look-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.team-look-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; }
+.team-look-head .metrics { margin-bottom: 8px; }
+.team-look-summary .headline { margin: 4px 0 2px; }
+.season-head { align-items: flex-end; margin-bottom: 6px; }
+.season-head h3 { margin: 0; }
+tr.t-sel td { background: #fff4d6 !important; }
+tr.t-sel td.sticky:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+
+/* ---------- loading bar while a page is being prepared ---------- */
+body.page-busy::after { content: ""; position: fixed; z-index: 70; top: 0; left: 0; height: 3px; width: 35%;
+  background: #f1c3cf; animation: busy-slide 1s ease-in-out infinite; }
+@keyframes busy-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
+.team-lookup { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: end; }
+.team-lookup .field.wide { flex: none; width: auto; }
+.team-lookup + .status:empty { display: none; }
+@media (max-width: 600px) { .team-lookup { grid-template-columns: minmax(0, 1fr) auto; } .team-lookup > .btn.small { grid-column: 1 / -1; justify-self: start; } }
