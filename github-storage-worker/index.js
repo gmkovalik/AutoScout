@@ -90,7 +90,19 @@ function githubHeaders(env) {
     "accept": "application/vnd.github+json",
     "content-type": "application/json",
     "x-github-api-version": "2022-11-28",
+    // GitHub refuses API requests without a User-Agent (HTTP 403), and Cloudflare Workers don't send one.
+    "user-agent": "AutoScout-team-storage",
   };
+}
+// Turn a failed GitHub response into a message that says what to fix.
+async function githubError(action, response) {
+  let detail = "";
+  try { detail = String((await response.json()).message || ""); } catch { /* not JSON */ }
+  let hint = "";
+  if (response.status === 401) hint = " The GITHUB_TOKEN secret is wrong or has expired: make a new token and update the secret.";
+  else if (response.status === 403 && /rate limit/i.test(detail)) hint = " GitHub's rate limit was reached; try again in a few minutes.";
+  else if (response.status === 403 || response.status === 404) hint = " Check that GITHUB_TOKEN has Contents: Read and write access to the repository named in DATA_REPO.";
+  return new Error("GitHub " + action + " failed: " + response.status + (detail ? " (" + detail + ")" : "") + "." + hint);
 }
 function repoPath(env, path) {
   return "https://api.github.com/repos/" + env.DATA_REPO + "/contents/" + path.split("/").map(encodeURIComponent).join("/");
@@ -98,7 +110,7 @@ function repoPath(env, path) {
 async function getGithubFile(env, path) {
   const response = await fetch(repoPath(env, path), { headers: githubHeaders(env) });
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error("GitHub read failed: " + response.status);
+  if (!response.ok) throw await githubError("read", response);
   const file = await response.json();
   const binary = atob((file.content || "").replace(/\n/g, ""));
   const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
@@ -116,7 +128,7 @@ async function putGithubFile(env, path, text, sha, message) {
   if (response.status === 409 || response.status === 422) {
     throw new Error("This file changed on another device. Reload it and try saving again.");
   }
-  if (!response.ok) throw new Error("GitHub write failed: " + response.status);
+  if (!response.ok) throw await githubError("write", response);
   return response.json();
 }
 async function deleteGithubFile(env, path, sha) {
@@ -125,7 +137,7 @@ async function deleteGithubFile(env, path, sha) {
     headers: githubHeaders(env),
     body: JSON.stringify({ message: "Update AutoScout team data", sha }),
   });
-  if (!response.ok) throw new Error("GitHub delete failed: " + response.status);
+  if (!response.ok) throw await githubError("delete", response);
 }
 function rateLimitKey(request) {
   return request.headers.get("CF-Connecting-IP") || "unknown";
@@ -203,7 +215,7 @@ export default {
           if (folder && !/^(sessions|photos)$/.test(folder)) return json({ error: "That folder is not allowed." }, 400, headers);
           const response = await fetch(repoPath(env, "teams/" + team + (folder ? "/" + folder : "")), { headers: githubHeaders(env) });
           if (response.status === 404) return json({ files: [] }, 200, headers);
-          if (!response.ok) throw new Error("GitHub list failed: " + response.status);
+          if (!response.ok) throw await githubError("list", response);
           const entries = await response.json();
           return json({ files: entries.map(x => ({ name: x.name, path: x.path, type: x.type, size: x.size })) }, 200, headers);
         }
