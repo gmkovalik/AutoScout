@@ -703,11 +703,18 @@ def view_teams(o):
         out["editor"] = {"team": team, "title": p.sel_var.get(), "tdc": p.tdc_var.get(),
                          "delta": p.delta_var.get(), "focus": p.focus_var.get(), "note": p.note_var.get()}
         out["panel"] = _team_panel(team, o)
-        out["league_info"] = _team_league_info(team, APP.session.season)
-        out["phase_charts"] = {
-            "event": _team_phase_chart(team, APP.session.season, APP.session.event_code, "event"),
-            "season": _team_phase_chart(team, APP.session.season, APP.session.event_code, "season")}
+        if o.get("extras", True):          # these ask FTCScout; the Teams page loads them separately
+            out.update(view_team_extras({"team": team}))
     return out
+
+
+def view_team_extras(o):
+    """League standings, meet history and the per-match phase charts for one team (network)."""
+    team = int(o.get("team") or 0)
+    s = APP.session
+    return {"league_info": _team_league_info(team, s.season),
+            "phase_charts": {"event": _team_phase_chart(team, s.season, s.event_code, "event"),
+                             "season": _team_phase_chart(team, s.season, s.event_code, "season")}}
 
 
 def view_notes(o):
@@ -799,9 +806,19 @@ def view_matches(o):
 
 
 def view_myteam(o):
+    """The My Team summary. With o["team"], the same summary for any team at the event
+    (my team is put back afterwards, so nothing else changes)."""
     keys = ("opr", "auto", "teleop", "endgame", "cap")
+    s = APP.session
+    keep = s.my_team
+    want = int(o.get("team") or 0)
     p = probe(A.MyTeamTab, stat_vars={k: Rec() for k in keys})
-    p.refresh()
+    try:
+        if want:
+            s.my_team = want
+        p.refresh()
+    finally:
+        s.my_team = keep
     labels = {"opr": "OPR", "auto": "Auto", "teleop": "Teleop", "endgame": "Endgame", "cap": "CAP"}
     return {"name": p.name_var.get(), "team": p.team_var.get(),
             "stats": [{"label": labels[k], "value": p.stat_vars[k].get()} for k in keys],
@@ -936,7 +953,7 @@ def view_settings(o):
 
 
 VIEWS = {"overview": view_overview, "competition": view_competition, "setup": view_setup,
-         "teams": view_teams, "notes": view_notes, "pick": view_pick, "team_notes": view_team_notes, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
+         "teams": view_teams, "notes": view_notes, "pick": view_pick, "team_notes": view_team_notes, "team_extras": view_team_extras, "matches": view_matches, "match_detail": view_match_detail, "myteam": view_myteam,
          "standings": view_standings, "alliances": view_alliances, "winrate": view_winrate,
          "analysis": view_analysis, "charts": view_charts, "live": view_live,
          "research": view_research, "settings": view_settings}

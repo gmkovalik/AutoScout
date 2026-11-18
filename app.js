@@ -148,11 +148,9 @@ const PAGES = [
   ["WORKSPACE", [["overview", "Overview", "⌂", "Competition command center"],
     ["competition", "Schedule Data", "\u2691\uFE0E", "Live schedule, match details and event statistics"],
     ["setup", "Setup", "◈", "Event and session setup"],
-    ["teams", "Teams", "▦", "Your event team database"],
+    ["teams", "Teams", "▦", "Look up any team: stats, notes, research and the event team list"],
     ["notes", "Notes", "✎", "Match notes and team notes"],
-    ["teampage", "Team Page", "◎", "Your account's pick list and team chat"],
-    ["research", "Team Research", "⌕", "Public FTC team intelligence"],
-    ["myteam", "My Team", "\u2605\uFE0E", "Your team's performance"]]],
+    ["teampage", "Team Page", "◎", "Your account's pick list and team chat"]]],
   ["STRATEGY", [["standings", "Standings", "☷", "Event standings"],
     ["alliances", "Alliances", "◇", "Alliance selection workspace"],
     ["winrate", "Win Rate Curve", "⌁", "Alliance win-rate modeling"],
@@ -197,7 +195,9 @@ function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "");
   const [page, query] = raw.split("?");
   const params = Object.fromEntries(new URLSearchParams(query || ""));
-  return { page: page === "matches" ? "competition" : (PAGE[page] ? page : "overview"), params };
+  const moved = { matches: "competition", research: "teams", myteam: "teams" };   // pages merged into others
+  const name = moved[page] || page;
+  return { page: PAGE[name] ? name : "overview", params };
 }
 function go(page, params) {
   const q = params ? "?" + new URLSearchParams(params).toString() : "";
@@ -216,6 +216,8 @@ async function render() {
   const token = ++renderToken;
   if (S.bootError) return;
   if (!S.boot && page !== "overview") paintPage(page, [engineWaitCard()]);   // the engine is still starting
+  // If the new page takes a moment (the engine is busy), show a loading bar instead of looking stuck.
+  const busy = setTimeout(() => { if (token === renderToken) document.body.classList.add("page-busy"); }, 250);
   let nodes;
   try {
     nodes = await RENDER[page](params);
@@ -223,7 +225,9 @@ async function render() {
     nodes = [card("Something went wrong", h("p", { class: "pre", text: e.message }),
       h("p", { class: "muted small", text: "If this keeps happening, reload the page. Your saved sessions are kept." }))];
   }
+  clearTimeout(busy);
   if (token !== renderToken || S.bootError) return;   // a newer render started meanwhile, or the engine failed
+  document.body.classList.remove("page-busy");
   const scroll = window.scrollY;
   paintPage(page, nodes);
   window.scrollTo(0, changed ? 0 : scroll);
@@ -694,7 +698,7 @@ RENDER.overview = async () => {
       card("Quick actions", h("div", { class: "actions" },
         action("01", "Load an event", "Bring in teams, schedule, and match results.", "setup", !d.head.loaded),
         action("02", "Scout a match", "Review matchups and enter your observations.", "matches"),
-        action("03", "Research any team", "Explore public season data, records, and performance graphs.", "research"),
+        action("03", "Research any team", "Look up any team: stats, notes, season record and performance graphs.", "teams"),
         action("04", "Build an alliance", "Compare team strengths and identify promising combinations.", "alliances"))),
       card("Workflow", h("div", { class: "steps" }, steps.map(([n, t, s]) => h("div", { class: "step" },
         h("span", { class: "n", text: n }), h("div", null, h("b", { text: t }), h("span", { text: s }))))),
@@ -729,7 +733,7 @@ RENDER.competition = async (params) => {
       h("input", { type: "number", min: 1, max: 60, value: S.auto.minutes, style: { width: "64px" }, onchange: (e) => { S.auto.minutes = Math.max(1, Number(e.target.value) || 2); if (S.auto.on) setAuto(true); } }),
       h("span", { class: "muted small", text: "min" }),
       btn("Alliance selection", () => go("alliances")),
-      btn("Team research", () => go("research")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
+      btn("Team look-up", () => go("teams")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
     card("Matches", matches),
   ];
 };
@@ -857,12 +861,179 @@ async function saveSession() {
 }
 
 // ---- Teams (+ the team sheet) ---------------------------------------------
+// ---- Teams: one page for any team ------------------------------------------
+// Top: look up any team (number, or name through FTCScout) or pick one from the
+// list; its quick look shows everything we know: stats at this event, its matches,
+// scouting notes, the Technical Issues editor, charts, league standings and its
+// public season record. Below: every team at the loaded event.
 RENDER.teams = async (params) => {
-  const team = params.team ? Number(params.team) : 0;
-  const [d] = await Promise.all([view("teams", { ...S.panel, team }), fetchCloudNotes()]);
-  // Mark which teams already have scouting notes (this device's and, when signed in, the shared ones).
+  const headTeam = () => (S.head && S.head.my_team ? Number(S.head.my_team) : 0);
+  const picked = /^\d+$/.test(String(params.team || "").trim()) ? Number(params.team) : 0;
+  const focus = picked || (params.team === "none" ? 0 : headTeam());   // nothing picked: show your own team
+  const [d, , mine] = await Promise.all([
+    view("teams", { ...S.panel, team: focus, extras: false }),
+    fetchCloudNotes(),
+    focus ? view("myteam", { team: focus }) : null]);
+  const myTeam = d.head && d.head.my_team ? Number(d.head.my_team) : headTeam();
   const counts = noteCountsByTeam(d.notes);
   const table = withNotesColumn(d.table, counts);
+  const statsOf = new Map(table.rows.map(([iid, vals]) => [String(iid), Object.fromEntries(table.columns.map((c, i) => [c.key, vals[i]]))]));
+  if (focus && focus !== S.teamsShown) {        // a new team was picked: bring its quick look into view
+    afterRender.push(() => { const el = document.getElementById("teamQuickLook"); if (el && window.scrollY > el.offsetTop) el.scrollIntoView({ block: "start" }); });
+  }
+  S.teamsShown = focus;
+  return [
+    teamLookupCard(focus, myTeam),
+    focus ? teamQuickLook(focus, d, mine, statsOf.get(String(focus)), counts[String(focus)] || 0, myTeam, !picked) : null,
+    teamListCard(table, counts, focus),
+  ];
+};
+
+function teamLookupCard(focus, myTeam) {
+  const R = S.research;
+  if (!R.season) R.season = String((S.head && S.head.season) || new Date().getFullYear());
+  const query = h("input", { type: "search", value: R.query || "", placeholder: "Team number or name, e.g. 12928 or LightSaders",
+    enterkeyhint: "search", autocomplete: "off" });
+  const status = h("div", { class: "status", text: R.status || "" });
+  const results = h("div", { class: "switchlist team-search-results" });
+  const drawResults = () => {
+    results.replaceChildren(...(R.results || []).map((t) => h("button", { type: "button", class: String(t.number) === String(focus) ? "on" : "",
+      onclick: () => { R.results = []; R.status = ""; go("teams", { team: t.number }); } }, t.text)));
+    results.hidden = !(R.results || []).length;
+  };
+  drawResults();
+  const search = async () => {
+    const q = query.value.trim();
+    R.query = q;
+    if (!q) { status.textContent = "Enter a team number or part of a team name."; return; }
+    if (/^\d+$/.test(q)) { R.results = []; R.status = ""; go("teams", { team: q }); return; }
+    status.textContent = "Searching FTCScout for teams…";
+    const r = await runAction("research_search", { query: q }, false);
+    if (!r.ok) { status.textContent = r.message || "Search failed."; return; }
+    R.results = r.results || []; R.status = r.message || "";
+    status.textContent = R.status;
+    drawResults();
+  };
+  query.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+  return card("Look up a team",
+    h("div", { class: "row team-lookup" }, h("label", { class: "field wide" }, h("span", { text: "Team number or name" }), query),
+      btn("Look up", search, "primary"),
+      myTeam && focus !== myTeam ? btn(`My team (${myTeam})`, () => go("teams", { team: myTeam }), "small") : null),
+    status, results,
+    h("p", { class: "note", text: "Any FTC team works, not only the teams at the loaded event. Or choose a team in the list below." }));
+}
+
+function teamQuickLook(team, d, mine, stats, noteCount, myTeam, isDefault) {
+  const atEvent = !!d.editor;
+  const name = (stats && stats.name) || (mine && mine.name && !/not at this event|Set your team/i.test(mine.name) ? String(mine.name).replace(/^\d+\s*/, "") : "");
+  const isMine = team === myTeam;
+  const head = h("section", { class: "card team-look-head", id: "teamQuickLook" },
+    h("div", { class: "team-look-title" },
+      h("div", null,
+        h("div", { class: "kicker", text: isMine ? "YOUR TEAM" : "TEAM QUICK LOOK" }),
+        h("h2", null, h("span", { class: "num", text: String(team) }), name ? h("span", { class: "nm", text: name }) : null)),
+      h("div", { class: "team-look-actions" },
+        isMine ? null : btn("Set as my team", async () => { const r = await runAction("my_team", { team }, false); if (r.ok) { toast(`Team ${team} is now your team.`); rerender(); } }, "small"),
+        btn("Close", () => go("teams", { team: "none" }), "small"))),
+    h("div", { class: "team-look-badges" },
+      h("span", { class: "note-badge " + (atEvent ? "shared" : "plain"), text: atEvent ? `At ${(S.head && S.head.event) || "this event"}` : "Not at the loaded event" }),
+      noteCount ? h("button", { class: "note-badge shared linkish", type: "button", onclick: () => { S.notesTab = "teams"; S.notesTeam = String(team); go("notes"); } },
+        `${noteCount} scouting note${noteCount === 1 ? "" : "s"}`) : h("span", { class: "note-badge local", text: "No scouting notes yet" }),
+      stats && stats.tdc && stats.tdc !== "-" ? h("span", { class: "note-badge issue", text: String(stats.tdc) }) : null),
+    atEvent && stats ? metricsRow([["rank", "RANK"], ["cap", "CAP"], ["opr", "OPR"], ["epa", "EPA"], ["auto", "AUTO"], ["teleop", "TELEOP"], ["endgame", "ENDGAME"], ["proj_opr", "PROJECTED OPR"]]
+      .filter(([k]) => stats[k] !== undefined).map(([k, label]) => ({ label, value: stats[k] }))) : null,
+    atEvent && mine ? h("div", { class: "team-look-summary" }, mine.change ? h("div", { class: "headline", text: mine.change }) : null,
+      mine.proj ? h("div", { class: "muted", text: mine.proj }) : null) : null);
+
+  const nodes = [head];
+  if (atEvent) {
+    nodes.push(card(`Matches at this event (${(mine && mine.table && mine.table.rows.length) || 0})`,
+      dataTable(mine && mine.table, { id: "team-matches", short: true, empty: "No matches for this team in the loaded schedule.", onRow: (iid) => openMatchDetails(iid) })));
+  }
+  nodes.push(sheetNotesCard(team));
+  if (atEvent) nodes.push(teamEditorCard(d.editor));
+  // Loading the season record ties up the engine until FTCScout answers, so it only starts
+  // by itself for teams that aren't at the event (where it's the only information there is).
+  nodes.push(seasonRecordCard(team, !atEvent));
+  if (atEvent) {
+    // League standings and the phase charts come from FTCScout: draw the page first, then fill these in.
+    const league = h("div", null, card("League standings & meet history", h("p", { class: "muted small", text: "Loading from FTCScout…" })));
+    const phases = h("div", null, card("Auto / Teleop / Endgame by match", h("p", { class: "muted small", text: "Loading…" })));
+    S.teamExtras = S.teamExtras || {};
+    const fill = (x) => {
+      league.replaceChildren(leagueInfoCard(x.league_info, team, async (event) => {
+        const loaded = await loadEvent({ season: event.season || x.league_info.season, event: event.code,
+          team: String(myTeam || team), extra: "", offline: false, history: true, schedule: "" }, { rerenderAfter: false });
+        if (loaded && loaded.ok) go("competition");
+      }));
+      phases.replaceChildren(teamPhaseChartCard(x.phase_charts));
+    };
+    const key = `${team}/${(S.head && S.head.season) || ""}/${(S.head && S.head.code) || ""}`;
+    if (S.teamExtras[key]) fill(S.teamExtras[key]);
+    else afterRender.push(() => view("team_extras", { team }).then((x) => { S.teamExtras[key] = x; if (league.isConnected) fill(x); })
+      .catch((e) => league.replaceChildren(card("League standings & meet history", h("p", { class: "status err", text: e.message })))));
+    nodes.push(league);
+    nodes.push(teamPanel(d.panel, { inSheet: true, onChange: () => rerender() }));
+    nodes.push(phases);
+  }
+  return h("div", { class: "team-look" }, nodes);
+}
+
+/** The Technical Issues editor (issue, delta, focus, sheet note). Changes recompute CAP and every prediction. */
+function teamEditorCard(e) {
+  const tdc = select(S.boot.tdc_issues.map((x) => [x, x || "- none -"]), e.tdc, () => apply());
+  const delta = h("input", { type: "number", value: e.delta, step: "any", inputmode: "decimal" });
+  const focus = select(S.boot.focus_modes, e.focus, () => apply());
+  const note = textInput(e.note, { placeholder: "Short pit note, robot issues…" });
+  delta.addEventListener("change", () => apply());
+  note.addEventListener("change", () => apply());          // save the sheet note when you leave the box
+  async function apply() {
+    const r = await runAction("team_edit", { team: e.team, tdc: tdc.value, delta: delta.value, focus: focus.value, note: note.value }, false);
+    if (r.ok) { toast("Saved. CAP and every prediction updated."); rerender(); }
+  }
+  return h("section", { class: "card" }, h("h3", { text: "Adjust this team (Technical Issues + Team Focus)" }),
+    h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Sheet note", note, "wide")),
+    h("div", { class: "row" }, btn("Apply", apply, "primary")));
+}
+
+/** The team's public season record from FTCScout (formerly Team Research). Loads after the page is shown. */
+function seasonRecordCard(team, autoLoad = true) {
+  const R = S.research;
+  const seasonIn = h("input", { type: "number", value: R.season, inputmode: "numeric", style: { maxWidth: "110px" } });
+  const body = h("div");
+  const load = async (force = false) => {
+    const season = seasonIn.value || R.season;
+    R.season = season;
+    const key = `${team}/${season}`;
+    S.profiles = S.profiles || {};
+    let P = force ? null : S.profiles[key];
+    if (!P) {
+      body.replaceChildren(h("p", { class: "muted small", text: `Loading Team ${team}'s ${season} season from FTCScout…` }));
+      const r = await runAction("research_load", { team, season }, false);
+      if (!r.ok) { body.replaceChildren(h("p", { class: "status err", text: r.message || "Could not load the season record." })); return; }
+      P = S.profiles[key] = r;
+    }
+    if (!body.isConnected && !force) return;
+    body.replaceChildren(
+      h("p", { class: "muted", text: P.subtitle }),
+      metricsRow(P.metrics), chartBlock(P.chart, { height: 300, name: `team_${team}_season` }),
+      h("div", { class: "grid2" },
+        card("Season event history", dataTable(P.events, { id: "r-events", short: true, empty: "No events this season." })),
+        h("div", null, card("Awards", dataTable(P.awards, { id: "r-awards", short: true, empty: "No awards listed." })),
+          card("Match log", dataTable(P.matches, { id: "r-matches", short: true, empty: "No match records.", onRow: (_iid, vals) => infoDialog("Team match record", vals.join("\n")) })))),
+      P.footer ? h("p", { class: "note pre", text: P.footer }) : null);
+  };
+  seasonIn.addEventListener("change", () => load());
+  if (autoLoad || (S.profiles && S.profiles[`${team}/${R.season}`])) afterRender.push(() => load());
+  else body.replaceChildren(h("p", { class: "muted small" }, `Team ${team}'s public results for the whole season: every event, awards and matches. `),
+    btn("Load season record", () => load(), "small primary"));
+  return h("section", { class: "card" },
+    h("div", { class: "row season-head" }, h("h3", { text: "Season record (FTCScout)" }), h("span", { class: "spacer" }),
+      field("Season", seasonIn), btn("Reload", () => load(true), "small")),
+    body);
+}
+
+function teamListCard(table, counts, focus) {
   const box = h("div");
   const withNotes = table.rows.filter((r) => counts[String(r[0])]).length;
   const filters = [["all", `All (${table.rows.length})`], ["yes", `With notes (${withNotes})`], ["no", `No notes yet (${table.rows.length - withNotes})`]];
@@ -870,24 +1041,21 @@ RENDER.teams = async (params) => {
   const draw = () => {
     const f = S.teamsNoteFilter || "all";
     for (const b of seg.children) { const on = b.dataset.f === f; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false"); }
-    const rows = table.rows.filter((r) => f === "all" || (f === "yes") === !!counts[String(r[0])]);
-    box.replaceChildren(dataTable({ ...table, rows }, { id: "teams", sticky: 2, flash: team || null, onRow: (iid) => go("teams", { team: iid }),
+    const rows = table.rows.filter((r) => f === "all" || (f === "yes") === !!counts[String(r[0])])
+      .map(([iid, vals, tags]) => [iid, vals, String(iid) === String(focus) ? [...tags, "sel"] : tags]);
+    box.replaceChildren(dataTable({ ...table, rows }, { id: "teams", sticky: 2, onRow: (iid) => go("teams", { team: iid }),
       cellClass: (key, v) => key === "notes" ? (v ? "notes-yes" : "notes-no") : "",
       empty: table.rows.length ? "No teams match this filter." : "No teams loaded. Load a meet on the Setup tab first." }));
   };
   for (const [f, label] of filters) seg.append(h("button", { type: "button", role: "radio", "data-f": f, onclick: () => { S.teamsNoteFilter = f; draw(); } }, label));
   draw();
-  const nodes = [
-    h("p", { class: "muted", text: "Select a team to view its charts, league standings, and every meet it attended this season." }),
+  return card(`Teams at ${(S.head && S.head.event) || "the loaded event"}`,
+    h("p", { class: "muted small", text: "Choose a team to open its quick look at the top of the page." }),
     table.rows.length ? h("div", { class: "row teams-filter" }, seg,
       h("span", { class: "muted small" }, h("span", { class: "notes-yes legend" }, "3"), " = scouting notes on this team",
         teamOn() ? ` (this device + ${accountName()})` : "")) : null,
-    box,
-  ];
-  if (team && d.editor) afterRender.push(() => openTeamSheet(d));
-  else if (team) afterRender.push(() => toast(`Team ${team} is not at this event.`, true));
-  return nodes;
-};
+    box);
+}
 
 // ---------------------------------------------------------------------------
 // Team account and shared notes
@@ -1890,49 +2058,6 @@ function teamPhaseChartCard(charts) {
   return card("Auto / Teleop / Endgame by match", controls, body);
 }
 
-function openTeamSheet(d) {
-  const e = d.editor;
-  let closeIt = null;
-  const back = () => { if (closeIt) closeIt(); };
-  closeIt = modal((close) => {
-    const tdc = select(S.boot.tdc_issues.map((x) => [x, x || "- none -"]), e.tdc, () => apply());
-    const delta = h("input", { type: "number", value: e.delta, step: "any", inputmode: "decimal" });
-    const focus = select(S.boot.focus_modes, e.focus, () => apply());
-    const note = textInput(e.note, { placeholder: "Short pit note, robot issues…" });
-    delta.addEventListener("change", () => apply());
-    note.addEventListener("change", () => apply());          // save the sheet note when you leave the box
-    async function apply() {
-      await runAction("team_edit", { team: e.team, tdc: tdc.value, delta: delta.value, focus: focus.value, note: note.value }, false);
-      const nd = await view("teams", { ...S.panel, team: e.team });
-      refreshPanel(nd.panel);
-      const notesBox = document.querySelector(".sheet-notes");
-      if (notesBox && notesBox._draw) notesBox._draw();
-      toast("Saved. CAP and every prediction updated.");
-    }
-    const panelBox = h("div");
-    const refreshPanel = (panel) => { panelBox.textContent = ""; panelBox.append(teamPanel(panel, { inSheet: true, onChange: async () => {
-      const nd = await view("teams", { ...S.panel, team: e.team }); refreshPanel(nd.panel);
-    } })); for (const fn of afterRender.splice(0)) fn(); };
-    refreshPanel(d.panel);
-    return [
-      h("button", { class: "btn small close", onclick: close, "aria-label": "Close" }, "✕"),
-      h("h2", { text: e.title }),
-      h("section", { class: "card" }, h("h3", { text: "Adjust the selected team (Technical Issues + Team Focus)" }),
-        h("div", { class: "form" }, field("Technical issue", tdc), field("Delta", delta), field("Focus", focus), field("Sheet note", note, "wide")),
-        h("div", { class: "row" }, btn("Apply", apply, "primary"))),
-      sheetNotesCard(e.team),
-      leagueInfoCard(d.league_info, e.team, async (event) => {
-        const loaded = await loadEvent({ season: event.season || d.league_info.season, event: event.code,
-          team: String(e.team), extra: "", offline: false, history: true, schedule: "" }, { rerenderAfter: false });
-        if (loaded && loaded.ok) { close(); go("competition"); }
-      }),
-      panelBox,
-      teamPhaseChartCard(d.phase_charts),
-    ];
-  }, { wide: true, onClose: () => { if (parseHash().page === "teams" && parseHash().params.team) { history.replaceState(null, "", "#/teams"); rerender(); } } });
-  return back;
-}
-
 // The one-team chart panel (Teams sheet and Charts ▸ One team)
 function teamPanel(p, { onChange, inSheet = false } = {}) {
   const set = (patch) => { Object.assign(S.panel, patch); onChange(); };
@@ -1974,55 +2099,6 @@ function teamPanel(p, { onChange, inSheet = false } = {}) {
         btn("Explain this chart", () => infoDialog("What this chart shows", p.explain_long), "small"))),
     overrides);
 }
-
-// ---- Team Research ---------------------------------------------------------
-RENDER.research = async () => {
-  const d = await view("research");
-  const R = S.research;
-  if (!R.season) R.season = d.season;
-  const query = h("input", { type: "search", value: R.query, placeholder: "e.g. 12928 or LightSaders", enterkeyhint: "search" });
-  const season = h("input", { type: "number", value: R.season, inputmode: "numeric", style: { maxWidth: "120px" } });
-  const status = h("div", { class: "status", text: R.status || d.hint });
-  const search = async () => {
-    R.query = query.value.trim(); R.season = season.value;
-    status.textContent = "Searching public team records…";
-    const r = await runAction("research_search", { query: R.query }, false);
-    if (!r.ok) { status.textContent = r.message; return; }
-    R.results = r.results; R.status = r.message || "";
-    if (r.direct) await loadTeam(r.direct);
-    else rerender();
-  };
-  query.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
-  async function loadTeam(n) {
-    R.season = season.value;
-    status.textContent = `Loading team ${n} · ${R.season} season…`;
-    const r = await runAction("research_load", { team: n, season: R.season }, false);
-    if (!r.ok) { status.textContent = r.message; R.status = r.message; return; }
-    R.profile = r; R.status = r.status;
-    rerender();
-  }
-  const results = R.results.length ? h("div", { class: "switchlist", style: { maxHeight: "260px" } },
-    R.results.map((t) => h("button", { type: "button", class: R.profile && R.profile.title.startsWith(String(t.number) + " ") ? "on" : "",
-      onclick: () => loadTeam(t.number) }, t.text))) : null;
-  const P = R.profile;
-  const profile = P ? [
-    plainCard(null, h("h2", { text: P.title, style: { fontSize: "22px" } }), h("p", { class: "muted", text: P.subtitle, style: { marginTop: "4px" } }),
-      metricsRow(P.metrics), chartBlock(P.chart, { height: 300, name: "team_research" })),
-    h("div", { class: "grid2" },
-      card("Season event history", dataTable(P.events, { id: "r-events", short: true, empty: "No events this season." })),
-      h("div", null, card("Awards", dataTable(P.awards, { id: "r-awards", short: true, empty: "No awards listed." })),
-        card("Match log", dataTable(P.matches, { id: "r-matches", short: true, empty: "No match records.", onRow: (_iid, vals) => infoDialog("Team match record", vals.join("\\n")) })))),
-    h("p", { class: "note pre", text: P.footer }),
-  ] : [];
-  return [
-    h("p", { class: "muted", text: "Research any FTC team using FTCScout's public statistics. This workspace is separate from your loaded scouting session." }),
-    card("Find a team",
-      h("div", { class: "row" }, field("Team number or name", query), field("Season (start year)", season),
-        h("div", { style: { alignSelf: "flex-end" } }, btn("Search teams", search, "primary"))),
-      status, results),
-    ...profile,
-  ];
-};
 
 // Open one consistent match detail view from every match list.
 async function openMatchDetails(label) {
@@ -2102,20 +2178,6 @@ function resultDialog(label, vals, cols) {
         btn("Cancel", close), btn("OK", ok, "primary"))];
   });
 }
-
-// ---- My Team ---------------------------------------------------------------
-RENDER.myteam = async () => {
-  const d = await view("myteam");
-  const team = h("input", { type: "number", value: d.team, inputmode: "numeric", style: { width: "110px" } });
-  const show = async () => { await runAction("my_team", { team: team.value }, false); rerender(); };
-  team.addEventListener("keydown", (e) => { if (e.key === "Enter") show(); });
-  return [
-    h("div", { class: "row", style: { marginBottom: "12px" } }, h("h2", { text: d.name, style: { fontSize: "22px", marginRight: "12px" } }),
-      h("span", { text: "Team" }), team, btn("Show", show)),
-    card("Season stats", metricsRow(d.stats), h("div", { class: "headline", text: d.change }), h("div", { class: "muted", text: d.proj })),
-    card("My matches", dataTable(d.table, { id: "mymatches", empty: "No matches for this team.", onRow: (iid) => openMatchDetails(iid) })),
-  ];
-};
 
 RENDER.standings = async () => {
   const d = await view("standings");
