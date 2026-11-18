@@ -332,7 +332,8 @@ table.data tr.flash td { animation: flash 1.6s ease-out; }
 .schedule-matches table { min-width: 1280px; }
 .schedule-matches tbody tr { cursor: pointer; }
 .schedule-matches tbody tr:hover { background: var(--brand-tint); }
-.schedule-matches td:last-child, .schedule-matches th:last-child { text-align: center; font-weight: 800; color: var(--brand-ink); white-space: nowrap; }
+.schedule-matches td.open-cell { text-align: center; font-weight: 800; color: var(--brand-ink); white-space: nowrap; }
+.schedule-matches td.rating-call { white-space: nowrap; }
 @media(max-width:700px) {
   .schedule-matches { max-height: 68vh; }
   .schedule-matches table { min-width: 1120px; }
@@ -963,7 +964,30 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
 :root[data-theme="dark"] .schedule-matches table.data tbody tr td.alliance-red-stat { background: #3a2226 !important; }
 :root[data-theme="dark"] .schedule-matches table.data tbody tr td.alliance-blue-stat { background: #1f2a40 !important; }
 :root[data-theme="dark"] .schedule-matches table.data tbody tr td.selected-team-number { background: #ffdf4d !important; color: #111 !important; }
-:root[data-theme="dark"] .schedule-matches td:last-child { color: var(--brand-text); }
+:root[data-theme="dark"] .schedule-matches table.data tbody tr td.open-cell { color: var(--brand-text) !important; }
 
 /* Appearance setting */
 .theme-choice { margin: 4px 0 6px; }
+
+/* ---------- Schedule Data: prediction accuracy + each rating's call ---------- */
+.acc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.acc-big { font-size: 30px; font-weight: 900; color: var(--brand-text); }
+.acc-rows { display: grid; gap: 6px; max-width: 720px; }
+.acc-row { display: grid; grid-template-columns: 64px minmax(80px, 1fr) 58px 64px auto auto; gap: 10px; align-items: center; font-size: 14px; }
+.acc-row.current .acc-name { color: var(--brand-text); }
+.acc-name { font-weight: 700; }
+.acc-bar { height: 10px; border-radius: 5px; background: var(--row-alt); border: 1px solid var(--border); overflow: hidden; }
+.acc-bar > div { height: 100%; background: #9aa3b2; }
+.acc-row.current .acc-bar > div { background: var(--brand); }
+.acc-pct { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+  .acc-row { grid-template-columns: 52px minmax(60px, 1fr) 52px auto; }
+  .acc-row .acc-count, .acc-row .note-badge.plain { display: none; }
+}
+.schedule-matches table.data tbody tr td.rating-call { font-weight: 700; }
+.schedule-matches table.data tbody tr td.rating-call.rc-red { color: #b42332 !important; }
+.schedule-matches table.data tbody tr td.rating-call.rc-blue { color: #245bb5 !important; }
+.schedule-matches table.data tbody tr td.rating-call.rc-ok { box-shadow: inset 0 -3px 0 #3fb36b; }
+.schedule-matches table.data tbody tr td.rating-call.rc-bad { box-shadow: inset 0 -3px 0 #c0392b; opacity: .85; }
+:root[data-theme="dark"] .schedule-matches table.data tbody tr td.rating-call.rc-red { color: #f08a8a !important; }
+:root[data-theme="dark"] .schedule-matches table.data tbody tr td.rating-call.rc-blue { color: #8fb3ff !important; }

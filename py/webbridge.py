@@ -430,6 +430,49 @@ def view_overview(o):
                         zip(["TEAMS TRACKED", "MATCHES LOADED", "MY TEAM", "SESSION STATUS"], p.home_metric_vars)]}
 
 
+def _predictions_by_rating() -> list:
+    """Every rating's predictions for this event's matches: [(name, kind, [Prediction])].
+
+    CAP and OPR come from each team's latest event: once FTCScout has this event's stats,
+    that is this event, so they are "predicting" results they were built from (hindsight).
+    EPA and XPR value each match with only the matches before it (real forecasts)."""
+    s = APP.session
+    if not s.matches:
+        return []
+    hindsight = bool(s.event_code) and any(getattr(t, "source_event", "") == s.event_code for t in s.teams.values())
+    kind = "hindsight" if hindsight else "forecast"
+    sets = [("CAP", lambda: A.predict(s.matches, s.teams, strength=lambda t: t.cap), kind),
+            ("OPR", lambda: A.predict(s.matches, s.teams, strength=lambda t: t.opr), kind),
+            ("EPA", lambda: A.predict_from_values(s.matches, getattr(s, "epa_values", None) or []), "forecast")]
+    if xpr is not None and getattr(s, "xpr_values", None):
+        sets.append(("XPR", lambda: A.predict_from_values(s.matches, s.xpr_values), "forecast"))
+    out = []
+    for name, build, k in sets:
+        try:
+            preds = build()
+        except Exception:                                  # noqa: BLE001
+            continue
+        if preds:
+            out.append((name, k, preds))
+    return out
+
+
+def _rating_comparison() -> dict:
+    """Accuracy per rating, and each match's call by every rating (for the matches table)."""
+    s = APP.session
+    accuracy, calls = [], {}
+    for name, kind, preds in _predictions_by_rating():
+        c, d = A.accuracy(preds)
+        accuracy.append({"rating": name, "correct": c, "decided": d, "pct": (100.0 * c / d) if d else None,
+                         "kind": kind, "current": name == s.settings.basis})
+        for p in preds:
+            w = p.winner
+            mark = "" if p.correct is None else (" ✓" if p.correct else " ✗")
+            text = ("Tie" if w == "TIE" else w.title()) + f" {p.red_pts:.0f}–{p.blue_pts:.0f}" + mark
+            calls.setdefault(p.match.label, {})[name] = {"text": text, "winner": w, "correct": p.correct}
+    return {"accuracy": accuracy, "calls": calls, "ratings": [a["rating"] for a in accuracy]}
+
+
 def view_competition(o):
     p = probe(A.CompetitionDayTab, metric_vars=recs(5))
     p.refresh()
@@ -442,7 +485,7 @@ def view_competition(o):
             "line": p.event_line.cfg.get("text", ""),
             "metrics": [{"label": lab, "value": v.get()} for lab, v in
                         zip(("EVENT TEAMS", "MATCHES", "PLAYED", "UP NEXT", "MY TEAM"), p.metric_vars)],
-            "matches": matches_table, "upcoming": upcoming}
+            "matches": matches_table, "upcoming": upcoming, **_rating_comparison()}
 
 
 def view_setup(o):
