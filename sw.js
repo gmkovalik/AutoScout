@@ -6,7 +6,7 @@
 const CACHE = "autoscout-v1";      // same name: keeps the downloaded Python runtime
 const SHELL = ["./", "index.html", "app.css", "app.js", "worker.js", "AutoScout.py", "py/tkstub.py", "py/xpr.py", "py/webbridge.py",
   "github-storage-worker/client.js",
-  "manifest.webmanifest", "assets/logo-56.png", "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png"];
+  "manifest.webmanifest", "assets/logo-56.png", "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png", "assets/biobuzz.png"];
 const NETWORK_WAIT_MS = 4000;     // how long to wait for the network before using the saved copy
 // Once the network has been too slow, use saved copies straight away for a
 // minute, so a page load gets one consistent set of files instead of a mix.

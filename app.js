@@ -181,12 +181,30 @@ const PAGES = [
 const PAGE = {};
 for (const [, items] of PAGES) for (const [id, title, icon, ctx] of items) PAGE[id] = { id, title, icon, ctx };
 
-// Menu icons drawn as SVG (the rest are text symbols). Team Page: a house.
-const NAV_SVG = { teampage: "M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-5.5h3V20h5V9.5" };
-function navSvg(d) {
+// Icons: simple line drawings (24x24, 2px stroke) so they look the same on every computer.
+const ring = (x, y, r) => `M${x - r} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+const ICONS = {
+  overview: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  competition: "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M8 14h3M13 14h3M8 17h3",
+  setup: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" + ring(15, 7, 2) + ring(9, 12, 2) + ring(17, 17, 2),
+  teams: ring(9, 8, 3.5) + "M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6" + "M15.5 4.6a3.5 3.5 0 0 1 0 6.8M17.5 14.4c2 .7 3.5 2.8 3.5 5.6",
+  notes: "M5 4h10l4 4v12H5zM15 4v4h4M8 12h8M8 16h6",
+  teampage: "M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-5.5h3V20h5V9.5",
+  standings: "M4 20v-7h5v7M9 20V5h6v15M15 20v-4h5v4M3 20h18",
+  alliances: ring(9, 12, 5) + ring(15, 12, 5),
+  winrate: "M4 4v16h16M7 15c3 0 3-6 6-6s3 3 6 3",
+  analysis: ring(12, 12, 8.5) + "M8 12.5l2.7 2.7L16 9.5",
+  charts: "M5 20V11M10 20V5M15 20v-6M20 20V9M3 20h18",
+  settings: ring(12, 12, 3) + "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1",
+  search: ring(11, 11, 6.5) + "M16 16l4.5 4.5",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+};
+function icon(name, cls = "ic") { return navSvg(ICONS[name] || ICONS.overview, cls); }
+const NAV_SVG = ICONS;
+function navSvg(d, cls = "ic ic-svg") {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "ic ic-svg"); svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", cls.includes("ic-svg") ? cls : cls + " ic-svg"); svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(ns, "path");
   path.setAttribute("d", d); path.setAttribute("fill", "none"); path.setAttribute("stroke", "currentColor");
   path.setAttribute("stroke-width", "2"); path.setAttribute("stroke-linejoin", "round"); path.setAttribute("stroke-linecap", "round");
@@ -270,7 +288,7 @@ function paintPage(page, nodes) {
   const main = $("#main");
   main.textContent = "";
   const info = PAGE[page];
-  main.append(h("div", { class: "pagehead" }, h("h1", { text: info.title }), h("span", { class: "ctx", text: info.ctx })));
+  main.append(h("div", { class: "pagehead" }, h("h1", { text: info.title })));
   if (S.loading) main.append(loadingBanner());
   main.append(...[].concat(nodes).filter(Boolean));
 }
@@ -649,7 +667,7 @@ function quickSwitch() {
       idx = Math.min(idx, Math.max(0, items.length - 1));
       list.textContent = "";
       items.forEach((p, i) => list.append(h("button", { class: i === idx ? "on" : "", type: "button",
-        onclick: () => { close(); go(p.id); } }, `${p.icon}  ${p.title}`, h("small", { text: p.ctx }))));
+        onclick: () => { close(); go(p.id); } }, h("span", { class: "qs-title" }, NAV_SVG[p.id] ? navSvg(NAV_SVG[p.id]) : null, p.title), h("small", { text: p.ctx }))));
       list.items = items;
     };
     input.addEventListener("input", () => { idx = 0; draw(); });
@@ -714,8 +732,10 @@ const RENDER = {};
 const OVERVIEW_LABELS = ["TEAMS TRACKED", "MATCHES LOADED", "MY TEAM", "SESSION STATUS"];
 RENDER.overview = async () => {
   // Before the engine has started, show the page straight away and fill in the numbers when it is ready.
-  const d = S.boot ? await view("overview") : { metrics: OVERVIEW_LABELS.map((label) => ({ label, value: "…" })), head: { loaded: false } };
+  const empty = { metrics: OVERVIEW_LABELS.map((label) => ({ label, value: "…" })), progress: null };
+  const d = S.boot ? await view("overview") : empty;
   const metrics = h("div", null, metricsRow(d.metrics));
+  const guide = h("div", null, overviewGuide(d.progress));
   if (!S.boot) {
     metrics.append(h("p", { class: "muted small engine-line" }, h("span", { class: "engine-status-text", text: S.engineStatus })));
     afterRender.push(() => {
@@ -723,35 +743,44 @@ RENDER.overview = async () => {
       view("overview").then((full) => {
         if (token !== renderToken || !metrics.isConnected) return;
         metrics.replaceChildren(metricsRow(full.metrics));
-        const first = document.querySelector(".actions .action");
-        if (first) first.classList.toggle("primary", !full.head.loaded);
+        guide.replaceChildren(overviewGuide(full.progress));
       }).catch(() => {});
     });
   }
-  const action = (n, title, desc, page, primary) => h("a", { class: "action" + (primary ? " primary" : ""), href: "#/" + page },
-    h("b", { text: `${n}   ${title}` }), h("span", { text: desc }));
-  const steps = [["01", "Set up your event", "Choose a season, event, and your team."],
-    ["02", "Build your dataset", "Load event data and add reliable pit or match observations."],
-    ["03", "Understand performance", "Use charts, CAP, EPA, and match analysis together."],
-    ["04", "Make a strategy call", "Compare alliances and validate predictions against real results."]];
   return [
-    hero("COMPETITION COMMAND CENTER", "Scout smarter. Pick stronger alliances.",
-      "Your match data, team intelligence, and strategy tools all in one workspace."),
-    metrics,
-    h("div", { class: "grid-even" },
-      card("Quick actions", h("div", { class: "actions" },
-        action("01", "Load an event", "Bring in teams, schedule, and match results.", "setup", !d.head.loaded),
-        action("02", "Scout a match", "Review matchups and enter your observations.", "matches"),
-        action("03", "Research any team", "Look up any team: stats, notes, season record and performance graphs.", "teams"),
-        action("04", "Build an alliance", "Compare team strengths and identify promising combinations.", "alliances"))),
-      card("Workflow", h("div", { class: "steps" }, steps.map(([n, t, s]) => h("div", { class: "step" },
-        h("span", { class: "n", text: n }), h("div", null, h("b", { text: t }), h("span", { text: s }))))),
-      h("p", { class: "note", text: isPhone() ? "Tip: the ☰ menu lists every workspace." : "Tip: use Ctrl+K (⌘K on a Mac) to jump to any workspace." }))),
-    card("Use it on a phone",
-      h("p", { text: "This is the same AutoScout as the desktop app, running in the browser. Add it to your home screen and it opens like an app, even with no signal at the venue once an event is loaded." }),
-      h("p", { class: "muted small", text: "iPhone: Safari ▸ Share ▸ Add to Home Screen.   Android: Chrome ▸ ⋮ ▸ Install app.   Data stays on this device; use Setup ▸ Download session file to move it to another device or to the desktop app." })),
+    h("div", { class: "overview-top" },
+      h("img", { class: "season-logo", src: "assets/biobuzz.png", alt: "BioBuzz", width: 400, height: 285 }),
+      metrics),
+    guide,
   ];
 };
+
+/** The event guide: what to do, in order, with what's already done ticked off. */
+function overviewGuide(p) {
+  const loaded = !!(p && p.loaded);
+  const steps = [
+    { title: "Load your event", page: "setup", go: "Setup",
+      text: loaded ? `${p.event || "Event"} is loaded${p.my_team ? `, with team ${p.my_team} as your team` : ""}.` : "Search for your meet on Setup and enter your team number.",
+      done: loaded },
+    { title: "Scout every match", page: "notes", go: "Notes",
+      text: p && p.notes ? `${p.notes} note${p.notes === 1 ? "" : "s"} so far. Add more from Notes or any match's details.` : "Write what each robot does, match by match. Add pit notes and photos on Teams.",
+      done: !!(p && p.notes) },
+    { title: "Follow the schedule", page: "competition", go: "Schedule Data",
+      text: p && p.played ? `${p.played} of ${p.matches} matches played. Check the predictions and how accurate they've been.` : "See every match's prediction. Results and accuracy fill in as matches are played.",
+      done: !!(p && p.played) },
+    { title: "Build your pick list", page: "teampage", go: "Team Page",
+      text: "Rank partners by their predicted score with your team, with notes for each. Shared with everyone signed in to your account." },
+    { title: "Alliance selection", page: "alliances", go: "Alliances",
+      text: "Compare the alliances you could form and who you can beat." },
+  ];
+  const next = steps.findIndex((st) => !st.done);
+  return h("section", { class: "card guide" },
+    h("h2", { class: "guide-title", text: "At the event" }),
+    h("ol", { class: "guide-steps" }, steps.map((st, i) => h("li", { class: "guide-step" + (st.done ? " done" : "") + (i === next ? " next" : "") },
+      h("span", { class: "guide-n" }, st.done ? icon("check") : String(i + 1)),
+      h("div", { class: "guide-body" }, h("b", { text: st.title }), h("span", { text: st.text })),
+      h("a", { class: "btn small" + (i === next ? " primary" : ""), href: "#/" + st.page }, st.go)))));
+}
 
 RENDER.competition = async (params) => {
   const d = await view("competition", {});
@@ -780,7 +809,8 @@ RENDER.competition = async (params) => {
   });
   matches.classList.add("schedule-matches");
   return [
-    hero("COMPETITION DAY", "Everything you need between matches.", d.head.loaded ? d.line : "Load an event to populate your matches."),
+    d.head.loaded || d.matches.rows.length ? (d.line ? h("p", { class: "event-line", text: d.line }) : null) :
+      card(null, h("p", { class: "muted" }, "No event loaded. ", h("a", { href: "#/setup" }, "Load one on Setup."))),
     metricsRow(d.metrics),
     h("div", { class: "row", style: { marginBottom: "14px" } },
       btn("Refresh meet data", async () => { const r = await runAction("refresh", {}); if (r.ok) rerender(); }, "primary"),
@@ -897,7 +927,6 @@ RENDER.setup = async () => {
   }
   return [
     card("Meet",
-      h("p", { class: "muted", text: "Find your competition by meet name or event code. Choose a result to load it automatically." }),
       h("div", { class: "form" }, field("Season", season), field("My team number", team)),
       h("div", { class: "row", style: { marginTop: "10px" } }, field("Find a meet", search, "wide"), searchBtn),
       searchStatus, results,
@@ -1002,7 +1031,7 @@ function teamLookupCard(focus, myTeam) {
       btn("Look up", search, "primary"),
       myTeam && focus !== myTeam ? btn(`My team (${myTeam})`, () => go("teams", { team: myTeam }), "small") : null),
     status, results,
-    h("p", { class: "note", text: "Any FTC team works, not only the teams at the loaded event. Or choose a team on the Team List tab." }));
+  );
 }
 
 function teamQuickLook(team, d, mine, stats, noteCount, myTeam, isDefault) {
@@ -1132,7 +1161,6 @@ function teamListCard(table, counts, focus) {
   for (const [f, label] of filters) seg.append(h("button", { type: "button", role: "radio", "data-f": f, onclick: () => { S.teamsNoteFilter = f; draw(); } }, label));
   draw();
   return card(`Teams at ${(S.head && S.head.event) || "the loaded event"}`,
-    h("p", { class: "muted small", text: "Choose a team to open it on the Team Look-up tab." }),
     table.rows.length ? h("div", { class: "row teams-filter" }, seg,
       h("span", { class: "muted small" }, h("span", { class: "notes-yes legend" }, "3"), " = scouting notes on this team",
         teamOn() ? ` (this device + ${accountName()})` : "")) : null,
