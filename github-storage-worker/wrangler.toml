@@ -8,7 +8,9 @@ enabled = true
 [vars]
 ALLOWED_ORIGIN = "https://gmkovalik.github.io"
 DATA_REPO = "gmkovalik/AutoScout-Data"
-# Add GITHUB_TOKEN, AUTH_PEPPER, and REGISTRATION_KEY as Worker secrets.
+# Add GITHUB_TOKEN and AUTH_PEPPER as Worker secrets.
+# Account creation is open to anyone. To require a setup code, add REQUIRE_SETUP_CODE = "true"
+# here and a REGISTRATION_KEY secret.
 
 [previews.vars]
 ALLOWED_ORIGIN = "https://example.com"

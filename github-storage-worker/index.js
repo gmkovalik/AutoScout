@@ -81,7 +81,10 @@ async function verifyToken(request, secret, team) {
   try { data = JSON.parse(decoder.decode(fromB64url(payload))); } catch { return false; }
   return data.team === team && Number(data.exp) > Date.now();
 }
-function validTeam(team) { return /^\d{1,8}$/.test(team); }
+// An account is an FTC team number (1-8 digits) or a username: 3-30 letters, digits,
+// "-" or "_", starting with a letter. Usernames are stored in lower case.
+function accountId(value) { return String(value || "").trim().toLowerCase(); }
+function validTeam(team) { return /^(\d{1,8}|[a-z][a-z0-9_-]{2,29})$/.test(team); }
 function validDataPath(path) {
   return path === "match-notes.json" || path === "team-notes.json" ||
     /^sessions\/[A-Za-z0-9_-]{1,80}\.json$/.test(path) ||
@@ -167,7 +170,7 @@ export default {
     if (!headers) return json({ error: "This website is not allowed to access team storage." }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
     try {
-      if (!env.DATA_REPO || !env.GITHUB_TOKEN || !env.AUTH_PEPPER || !env.REGISTRATION_KEY) {
+      if (!env.DATA_REPO || !env.GITHUB_TOKEN || !env.AUTH_PEPPER) {
         return json({ error: "Team storage is not configured yet." }, 503, headers);
       }
       const url = new URL(request.url);
@@ -178,13 +181,17 @@ export default {
       if (url.pathname === "/api/register" && request.method === "POST") {
         if (limited(request)) return json({ error: "Too many attempts. Wait a minute and try again." }, 429, headers);
         const body = await readJson(request);
-        const team = String(body.team || "").trim();
+        const team = accountId(body.team);
         const password = String(body.password || "");
-        if (!validTeam(team)) return json({ error: "Enter a valid team number." }, 400, headers);
-        if (password.length < 12) return json({ error: "Use a team password with at least 12 characters." }, 400, headers);
-        if (body.registrationKey !== env.REGISTRATION_KEY) return json({ error: "The team setup code is incorrect." }, 403, headers);
+        if (!validTeam(team)) return json({ error: "Enter a team number, or a username of 3-30 letters, numbers, - or _ that starts with a letter." }, 400, headers);
+        if (password.length < 12) return json({ error: "Use a password with at least 12 characters." }, 400, headers);
+        // Anyone can create an account. To require a setup code again, set the variable
+        // REQUIRE_SETUP_CODE = "true" and keep the REGISTRATION_KEY secret.
+        if (env.REQUIRE_SETUP_CODE === "true" && body.registrationKey !== env.REGISTRATION_KEY) {
+          return json({ error: "The setup code is incorrect." }, 403, headers);
+        }
         const path = "teams/" + team + "/account.json";
-        if (await getGithubFile(env, path)) return json({ error: "That team account already exists. Sign in instead." }, 409, headers);
+        if (await getGithubFile(env, path)) return json({ error: "That account already exists. Sign in instead, or choose another username." }, 409, headers);
         const salt = b64url(crypto.getRandomValues(new Uint8Array(16)));
         const verifier = await passwordVerifier(password, salt, env.AUTH_PEPPER);
         await putGithubFile(env, path, JSON.stringify({
@@ -196,10 +203,10 @@ export default {
       if (url.pathname === "/api/login" && request.method === "POST") {
         if (limited(request)) return json({ error: "Too many attempts. Wait a minute and try again." }, 429, headers);
         const body = await readJson(request);
-        const team = String(body.team || "").trim();
-        if (!validTeam(team)) return json({ error: "Enter a valid team number." }, 400, headers);
+        const team = accountId(body.team);
+        if (!validTeam(team)) return json({ error: "Enter your team number or username." }, 400, headers);
         const account = await getGithubFile(env, "teams/" + team + "/account.json");
-        if (!account) return json({ error: "Team account not found." }, 404, headers);
+        if (!account) return json({ error: "No account with that team number or username. Create one first." }, 404, headers);
         const record = JSON.parse(account.text);
         const iterations = Number(record.password.iterations) || PBKDF2_ITERATIONS;
         if (iterations > PBKDF2_ITERATIONS) {
@@ -207,13 +214,13 @@ export default {
         }
         const actual = await passwordVerifier(String(body.password || ""), record.password.salt, env.AUTH_PEPPER, iterations);
         if (!equal(encoder.encode(actual), encoder.encode(record.password.verifier))) {
-          return json({ error: "Incorrect team number or password." }, 401, headers);
+          return json({ error: "Incorrect team number, username or password." }, 401, headers);
         }
         return json({ ok: true, token: await issueToken(team, env.AUTH_PEPPER), team }, 200, headers);
       }
       if (parts[0] === "api" && parts[1] === "team" && parts.length >= 3) {
         const team = parts[2];
-        if (!validTeam(team)) return json({ error: "Invalid team number." }, 400, headers);
+        if (!validTeam(team)) return json({ error: "Invalid team number or username." }, 400, headers);
         if (!await verifyToken(request, env.AUTH_PEPPER, team)) {
           return json({ error: "Sign in to this team account first." }, 401, headers);
         }
