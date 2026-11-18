@@ -29,7 +29,7 @@ This is shared-workspace access control, not confidentiality. Do not put private
 4. Add these as Worker secrets, never as source files:
    - `GITHUB_TOKEN`: fine-grained GitHub token with **Contents: Read and write** on the data repository only.
    - `AUTH_PEPPER`: a randomly generated secret of at least 32 bytes. Keep a secure offline backup. Changing it invalidates existing password verification and active sessions.
-   - `REGISTRATION_KEY`: a separate one-time/team-account setup code. Share it only with trusted team administrators. It prevents strangers from claiming a public team number.
+   - `REGISTRATION_KEY` (optional): a setup code for creating accounts. It is only checked when the Worker variable `REQUIRE_SETUP_CODE` is `"true"`; by default anyone can create an account. When it is required, the website asks for the code after the first attempt without it.
 5. Keep the data repository public. Do not commit the Worker secrets or a token to GitHub.
 6. Configure Worker rate limiting for `/api/login` and `/api/register`. The in-memory limiter in this Worker is only a best-effort fallback because serverless instances do not share memory.
 7. Set the website configuration before loading the client:
@@ -42,8 +42,8 @@ This is shared-workspace access control, not confidentiality. Do not put private
 
 ## API
 
-- `POST /api/register`: `{ team, password, registrationKey }`; team passwords must be at least 12 characters.
-- `POST /api/login`: `{ team, password }`.
+- `POST /api/register`: `{ team, password, registrationKey? }`. `team` is an FTC team number (1-8 digits) or a username (3-30 letters, digits, `-` or `_`, starting with a letter; stored in lower case). Passwords must be at least 12 characters. Open to anyone unless `REQUIRE_SETUP_CODE` is `"true"`.
+- `POST /api/login`: `{ team, password }` (team number or username).
 - `GET /api/team/:team/files`: list that team's data files. Add `?folder=sessions` or `?folder=photos` to list a sub-folder.
 - `GET /api/team/:team/files/:path`: read an allowed JSON file.
 - `PUT /api/team/:team/files/:path`: create/update an allowed JSON file. Send the last read ETag as `If-Match` to prevent stale writes.
@@ -53,7 +53,7 @@ Allowed paths are `match-notes.json`, `team-notes.json`, `sessions/<id>.json`, a
 
 ## How the website uses it
 
-- **Signing in:** the account button in the top bar (or **Settings > Team account**) opens the sign-in dialog. "New team? Create a team account" asks for the setup code. The sign-in is remembered on that device until the 12-hour token expires or **Sign out** is pressed. An expired or rejected token signs the device out automatically.
+- **Signing in:** the account button in the top bar (or **Settings > Team account**) opens the sign-in dialog. "New here? Create an account" takes a team number or a username and a password; no setup code is needed unless `REQUIRE_SETUP_CODE` is turned on. The sign-in is remembered on that device until the 12-hour token expires or **Sign out** is pressed. An expired or rejected token signs the device out automatically.
 - **Notes:** notes are always saved in the browser's session first, so scouting works offline and without an account. When signed in, each new note is also added to `team-notes.json` or `match-notes.json`, and the Notes pages show the device's notes and the team's shared notes together, each marked **Shared**, **Team** (shared from another device) or **Not shared**. "Share N notes from this device" uploads only the notes the team does not have yet; photos are uploaded once per note. Deleting a shared note removes it for the whole team (after a confirmation).
 - **Match notes** carry an `event` field (`season/code`) so notes from different events with the same match label are kept apart. Notes shared before this field existed show at every event.
 - **Sessions:** "Save session to team" writes `sessions/<season>_<code>.json` and records it in `sessions/index.json`; "Open a team session" lists them from that index.

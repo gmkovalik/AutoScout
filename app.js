@@ -880,6 +880,9 @@ RENDER.teams = async (params) => {
 const Team = window.AutoScoutTeamStorage || null;
 const teamReady = () => !!(Team && Team.configured());
 const teamOn = () => !!(Team && Team.signedIn());
+/** Accounts are a team number or a username (stored in lower case). */
+const validAccountName = (v) => /^(\d{1,8}|[a-z][a-z0-9_-]{2,29})$/.test(String(v || ""));
+function accountName(id = Team && Team.currentTeam()) { return /^\d+$/.test(String(id || "")) ? `Team ${id}` : String(id || ""); }
 const CLOUD = { team: null, at: 0, matches: {}, teams: {}, error: "", loading: null };
 const CLOUD_FRESH_MS = 60 * 1000;            // reuse shared notes fetched in the last minute
 const photoCache = new Map();                // photoRef -> data URL (or a pending promise)
@@ -1008,7 +1011,7 @@ async function addTeamNote(args) {
   const r = await runAction("team_note_add", args, false);
   if (!r.ok) { if (!r.message) toast("Could not save team note.", true); return r; }
   if (teamOn() && r.note) {
-    try { await shareNotes([{ ...r.note, photo: args.photo }], []); toast(`Saved and shared with Team ${Team.currentTeam()}.`); }
+    try { await shareNotes([{ ...r.note, photo: args.photo }], []); toast(`Saved and shared with ${accountName()}.`); }
     catch (e) { toast("Saved on this device. Not shared yet: " + e.message, true); }
   } else toast(r.message);
   return r;
@@ -1017,7 +1020,7 @@ async function addMatchNote(args) {
   const r = await runAction("note_add", args, false);
   if (!r.ok) { if (!r.message) toast("Could not save note.", true); return r; }
   if (teamOn() && r.note) {
-    try { await shareNotes([], [{ match: args.match, ...r.note, photo: args.photo }]); toast(`${r.message} Shared with Team ${Team.currentTeam()}.`); }
+    try { await shareNotes([], [{ match: args.match, ...r.note, photo: args.photo }]); toast(`${r.message} Shared with ${accountName()}.`); }
     catch (e) { toast("Saved on this device. Not shared yet: " + e.message, true); }
   } else toast(r.message);
   return r;
@@ -1037,7 +1040,7 @@ function deleteNote(kind, group, n, after) {
     } catch (e) { toast("Could not delete the note: " + e.message, true); }
     if (after) after();
   };
-  if (n.shared) confirmDialog("Delete shared note?", `This removes the note for everyone on Team ${Team.currentTeam()}.`, "Delete", run);
+  if (n.shared) confirmDialog("Delete shared note?", `This removes the note for everyone signed in as ${accountName()}.`, "Delete", run);
   else run();
 }
 
@@ -1123,12 +1126,12 @@ function notesSyncBar(unshared) {
   return h("div", { class: "sync-bar" + (CLOUD.error ? " err" : "") },
     h("span", { class: "sync-dot" + (CLOUD.error ? " bad" : ""), "aria-hidden": "true" }),
     h("span", { class: "sync-text" },
-      h("b", { text: `Team ${Team.currentTeam()}` }),
+      h("b", { text: accountName() }),
       CLOUD.error ? ` · Shared notes unavailable: ${CLOUD.error} Showing this device's notes.` :
         ` · shared notes${when ? " updated " + when : ""}`),
     unshared ? btn(`Share ${unshared} note${unshared === 1 ? "" : "s"} from this device`, async (e) => {
       e.target.disabled = true;
-      try { const n = await shareAllLocalNotes(); toast(n ? `Shared ${n} note${n === 1 ? "" : "s"} with Team ${Team.currentTeam()}.` : "Everything is already shared."); }
+      try { const n = await shareAllLocalNotes(); toast(n ? `Shared ${n} note${n === 1 ? "" : "s"} with ${accountName()}.` : "Everything is already shared."); }
       catch (err) { toast("Could not share notes: " + err.message, true); }
       rerender();
     }, "small primary") : null,
@@ -1180,7 +1183,7 @@ function renderTeamNotes(d, notes) {
       rerender();
     }
   }, "primary");
-  const where = teamOn() ? `Saved on this device and shared with Team ${Team.currentTeam()}.` :
+  const where = teamOn() ? `Saved on this device and shared with ${accountName()}.` :
     "Saved with this AutoScout session on this device." + (teamReady() ? " Sign in to share with your team." : "");
 
   // ---- list, filtered by team and by text
@@ -1271,36 +1274,45 @@ function openSignIn(mode = "signin") {
   if (!teamReady()) { toast("Team storage is not set up for this site.", true); return; }
   modal((close) => {
     let creating = mode === "create";
+    let needCode = false;          // only if the storage service is set to require a setup code
     const title = h("h2");
     const intro = h("p", { class: "muted small" });
-    const team = h("input", { type: "text", inputmode: "numeric", pattern: "[0-9]*", name: "username", autocomplete: "username",
-      placeholder: "e.g. 12928", value: (S.head && S.head.my_team) || "" });
-    const pw = h("input", { type: "password", name: "password", placeholder: "Shared team password" });
+    const team = h("input", { type: "text", name: "username", autocomplete: "username", autocapitalize: "none", spellcheck: "false",
+      placeholder: "e.g. 12928 or lightsaders", value: (S.head && S.head.my_team) || "" });
+    const pw = h("input", { type: "password", name: "password", placeholder: "Password" });
     const code = h("input", { type: "password", name: "setup-code", autocomplete: "off", placeholder: "From the AutoScout administrator" });
-    const codeField = field("Team setup code", code);
+    const codeField = field("Setup code", code);
+    const hint = h("span", { class: "muted small field-hint" });
     const msg = h("p", { class: "status", role: "alert" });
     const submit = h("button", { class: "btn primary", type: "submit" });
     const toggle = h("button", { class: "linkbtn", type: "button", onclick: () => { creating = !creating; msg.textContent = ""; draw(); } });
     const show = check("Show password", false, (v) => { pw.type = v ? "text" : "password"; });
     function draw() {
-      title.textContent = creating ? "Create a team account" : "Sign in to your team";
+      title.textContent = creating ? "Create an account" : "Sign in";
       intro.textContent = creating
-        ? "One shared account per team. Choose a password of at least 12 characters that you don't use anywhere else, and share it only with your team."
-        : "Share scouting notes, photos and sessions with everyone on your team. You stay signed in on this device for 12 hours.";
-      codeField.hidden = !creating;
+        ? "Use your FTC team number to share with your whole team, or pick a username. Everyone who signs in with the same name and password sees the same notes."
+        : "Share scouting notes, photos and sessions between devices. You stay signed in on this device for 12 hours.";
+      hint.textContent = creating ? "A team number, or a username of 3-30 letters, numbers, - or _ starting with a letter." : "";
+      hint.hidden = !creating;
+      codeField.hidden = !(creating && needCode);
       pw.autocomplete = creating ? "new-password" : "current-password";
-      submit.textContent = creating ? "Create team account" : "Sign in";
-      toggle.textContent = creating ? "Already have a team account? Sign in" : "New team? Create a team account";
+      pw.placeholder = creating ? "At least 12 characters" : "Password";
+      submit.textContent = creating ? "Create account" : "Sign in";
+      toggle.textContent = creating ? "Already have an account? Sign in" : "New here? Create an account";
     }
     draw();
     const form = h("form", { class: "signin-form", novalidate: true, onsubmit: async (e) => {
       e.preventDefault();
-      const t = team.value.trim();
+      const t = team.value.trim().toLowerCase();
       msg.className = "status err";
-      if (!/^\d{1,8}$/.test(t)) { msg.textContent = "Enter your FTC team number."; team.focus(); return; }
-      if (!pw.value) { msg.textContent = "Enter the team password."; pw.focus(); return; }
-      if (creating && pw.value.length < 12) { msg.textContent = "Use a team password with at least 12 characters."; pw.focus(); return; }
-      if (creating && !code.value.trim()) { msg.textContent = "Enter the team setup code."; code.focus(); return; }
+      if (!validAccountName(t)) {
+        msg.textContent = creating ? "Enter a team number, or a username of 3-30 letters, numbers, - or _ that starts with a letter."
+          : "Enter your team number or username.";
+        team.focus(); return;
+      }
+      if (!pw.value) { msg.textContent = "Enter the password."; pw.focus(); return; }
+      if (creating && pw.value.length < 12) { msg.textContent = "Use a password with at least 12 characters."; pw.focus(); return; }
+      if (creating && needCode && !code.value.trim()) { msg.textContent = "Enter the setup code."; code.focus(); return; }
       submit.disabled = true;
       msg.className = "status";
       msg.textContent = creating ? "Creating the account…" : "Signing in…";
@@ -1308,18 +1320,20 @@ function openSignIn(mode = "signin") {
         if (creating) await Team.register(t, pw.value, code.value.trim());
         else await Team.login(t, pw.value);
         close();
-        toast(creating ? `Team ${t} account created. You're signed in.` : `Signed in to Team ${t}.`);
+        toast(creating ? `Account ${accountName(t)} created. You're signed in.` : `Signed in as ${accountName(t)}.`);
       } catch (err) {
         msg.className = "status err";
         msg.textContent = err.message;
         submit.disabled = false;
+        if (creating && /setup code/i.test(err.message) && !needCode) { needCode = true; draw(); }
       }
     } },
-      field("Team number", team), field("Team password", pw), show, codeField, msg,
+      h("label", { class: "field" }, h("span", { text: "Team number or username" }), team, hint),
+      field("Password", pw), show, codeField, msg,
       h("div", { class: "foot" }, toggle, h("span", { class: "spacer" }), btn("Cancel", close), submit));
     return [h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
       title, intro, form,
-      h("p", { class: "note", text: "Team data is stored in a public GitHub repository: anyone can read it. Don't put private or personal information in notes." })];
+      h("p", { class: "note", text: "Shared data is stored in a public GitHub repository: anyone can read it. Don't put private or personal information in notes, and don't reuse a password from another site." })];
   });
 }
 
@@ -1357,7 +1371,7 @@ async function openTeamSessions() {
   const list = await listTeamSessions();
   modal((close) => [
     h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
-    h("h2", { text: `Team ${Team.currentTeam()} sessions` }),
+    h("h2", { text: `${accountName()} sessions` }),
     list.length ? h("div", { class: "sessions" }, list.map((s) => h("div", { class: "sess" },
       h("div", { class: "info" }, h("b", { text: s.event || s.slug }),
         h("span", { class: "muted small", text: [s.season && s.code ? `${s.season}/${s.code}` : "", s.saved ? "saved " + new Date(s.saved).toLocaleString() : ""].filter(Boolean).join(" · ") })),
@@ -1384,9 +1398,9 @@ function accountPanel(onDone) {
   if (!teamOn()) {
     return h("div", { class: "account-panel" },
       h("p", { text: "You're using AutoScout on this device only. Notes and sessions are saved in this browser and work offline." }),
-      h("p", { class: "muted small", text: "Sign in with your team's shared account to see each other's scouting notes and photos." }),
+      h("p", { class: "muted small", text: "Sign in with your team number or a username to share scouting notes and photos between devices." }),
       h("div", { class: "row" }, btn("Sign in", () => { if (onDone) onDone(); openSignIn(); }, "primary"),
-        btn("Create team account", () => { if (onDone) onDone(); openSignIn("create"); })));
+        btn("Create an account", () => { if (onDone) onDone(); openSignIn("create"); })));
   }
   const until = new Date(Team.expiresAt()).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
   const busy = (fn) => async (e) => {
@@ -1396,16 +1410,16 @@ function accountPanel(onDone) {
   };
   return h("div", { class: "account-panel" },
     h("div", { class: "account-status" }, h("span", { class: "sync-dot", "aria-hidden": "true" }),
-      h("div", null, h("b", { text: `Signed in to Team ${Team.currentTeam()}` }),
+      h("div", null, h("b", { text: `Signed in as ${accountName()}` }),
         h("span", { class: "muted small", text: `Stays signed in on this device until ${until}.` }))),
     h("div", { class: "account-actions" },
       btn("Team notes", () => { if (onDone) onDone(); S.notesTab = "teams"; go("notes"); }, "small"),
       btn("Share this device's notes", busy(async () => {
         const n = await shareAllLocalNotes();
-        toast(n ? `Shared ${n} note${n === 1 ? "" : "s"} with Team ${Team.currentTeam()}.` : "Everything is already shared.");
+        toast(n ? `Shared ${n} note${n === 1 ? "" : "s"} with ${accountName()}.` : "Everything is already shared.");
         if (S.page === "notes") rerender();
       }), "small"),
-      btn("Save session to team", busy(async () => { await saveSessionToTeam(); toast(`Session saved to Team ${Team.currentTeam()}.`); }), "small"),
+      btn("Save session to team", busy(async () => { await saveSessionToTeam(); toast(`Session saved to ${accountName()}.`); }), "small"),
       btn("Open a team session", busy(async () => { if (onDone) onDone(); await openTeamSessions(); }), "small"),
       btn("Sign out", () => { if (onDone) onDone(); Team.signOut(); toast("Signed out. Notes stay saved on this device."); }, "small danger")));
 }
@@ -1420,8 +1434,8 @@ function updateAccountButton() {
   b.hidden = !teamReady();
   const on = teamOn();
   b.classList.toggle("on", on);
-  b.querySelector(".account-label").textContent = on ? `Team ${Team.currentTeam()}` : "Sign in";
-  b.title = on ? `Signed in to Team ${Team.currentTeam()}` : "Sign in to share notes with your team";
+  b.querySelector(".account-label").textContent = on ? accountName() : "Sign in";
+  b.title = on ? `Signed in as ${accountName()}` : "Sign in to share notes with your team";
   b.setAttribute("aria-label", b.title);
 }
 if (Team) Team.onChange(() => {
