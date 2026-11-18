@@ -756,15 +756,27 @@ RENDER.overview = async () => {
 RENDER.competition = async (params) => {
   const d = await view("competition", {});
   if (d.head.loaded && !S.auto.initialized) { S.auto.initialized = true; setAuto(true); }
+  // Far right: every rating's call for each match (winner, predicted score, ✓/✗ once played).
+  const ratings = d.ratings || [];
+  const calls = d.calls || {};
   const table = {
-    columns: [...d.matches.columns, { key: "open", label: "MATCH DATA", align: "center" }],
-    rows: d.matches.rows.map(([iid, vals, tags]) => [iid, [...vals, "OPEN ↗"], tags]),
+    columns: [...d.matches.columns, { key: "open", label: "MATCH DATA", align: "center" },
+      ...ratings.map((r) => ({ key: "rc_" + r, label: `${r} call${r === d.head.basis ? " ★" : ""}`, align: "center" }))],
+    rows: d.matches.rows.map(([iid, vals, tags]) => [iid,
+      [...vals, "OPEN ↗", ...ratings.map((r) => ((calls[iid] || {})[r] || {}).text || "")], tags]),
   };
   const matches = dataTable(table, {
     id: "schedule-matches", sticky: 1, matchStyle: true, mineTeam: d.head.my_team, short: true,
     wrap: ["predicted", "actual"],
     empty: "Load an event to populate the matches table.",
     onRow: (label) => openMatchDetails(label),
+    cellClass: (key, v, iid) => {
+      if (key === "open") return "open-cell";
+      if (!key.startsWith("rc_")) return "";
+      const c = (calls[iid] || {})[key.slice(3)] || {};
+      return ["rating-call", c.winner === "RED" ? "rc-red" : c.winner === "BLUE" ? "rc-blue" : "rc-tie",
+        c.correct === true ? "rc-ok" : c.correct === false ? "rc-bad" : ""].join(" ");
+    },
   });
   matches.classList.add("schedule-matches");
   return [
@@ -778,9 +790,38 @@ RENDER.competition = async (params) => {
       h("span", { class: "muted small", text: "min" }),
       btn("Alliance selection", () => go("alliances")),
       btn("Team look-up", () => go("teams")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
-    card("Matches", matches),
+    accuracyCard(d.accuracy || [], d.head.basis),
+    card("Matches", matches,
+      ratings.length ? h("p", { class: "note", text: `The columns on the far right show what each rating predicts for every match: the winner and predicted score, then ✓ or ✗ once it's played. ★ marks the rating in use (Settings).` }) : null),
   ];
 };
+
+/** How often each rating has called the winner at this event (played matches, ties left out). */
+function accuracyCard(rows, basis) {
+  if (!rows.length) return null;
+  const decided = Math.max(0, ...rows.map((r) => r.decided));
+  if (!decided) {
+    return card("Prediction accuracy", h("p", { class: "muted", text: "No matches with a winner yet. Accuracy appears here as results come in." }));
+  }
+  const cur = rows.find((r) => r.current) || rows[0];
+  const best = Math.max(...rows.map((r) => r.pct ?? -1));
+  return card("Prediction accuracy",
+    h("div", { class: "acc-head" },
+      h("b", { class: "acc-big", text: cur.pct == null ? "-" : `${cur.pct.toFixed(1)}%` }),
+      h("span", null, `of played matches called correctly by ${cur.rating} (${cur.correct} of ${cur.decided}), the rating in use.`)),
+    h("div", { class: "acc-rows" }, rows.map((r) => h("div", { class: "acc-row" + (r.current ? " current" : "") },
+      h("span", { class: "acc-name", text: r.rating + (r.current ? " ★" : "") }),
+      h("div", { class: "acc-bar" }, h("div", { style: { width: `${(r.pct || 0).toFixed(1)}%` } })),
+      h("span", { class: "acc-pct", text: r.pct == null ? "-" : `${r.pct.toFixed(1)}%` }),
+      h("span", { class: "muted small acc-count", text: `${r.correct}/${r.decided}` }),
+      h("span", { class: "note-badge " + (r.kind === "forecast" ? "shared" : "local"), title: r.kind === "forecast"
+        ? "Each match was predicted using only the matches before it." : "Built from this event's own results, so it already knew how these matches went.",
+        text: r.kind === "forecast" ? "Forecast" : "Hindsight" }),
+      r.pct === best && rows.filter((x) => x.pct === best).length === 1 ? h("span", { class: "note-badge plain", text: "Best" }) : null))),
+    h("p", { class: "note", text: "Forecast: each match was predicted using only the matches played before it, a fair test. " +
+      "Hindsight: CAP and OPR use this event's own results once FTCScout has them, so they partly \"know\" the answers and look better than they would in advance. " +
+      `With ${decided} matches, differences of a few percent can be luck.` }));
+}
 
 RENDER.setup = async () => {
   const d = await view("setup");
