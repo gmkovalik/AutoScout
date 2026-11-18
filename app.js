@@ -790,37 +790,24 @@ RENDER.competition = async (params) => {
       h("span", { class: "muted small", text: "min" }),
       btn("Alliance selection", () => go("alliances")),
       btn("Team look-up", () => go("teams")), h("span", { class: "spacer" }), btn("Save session", saveSession)),
-    accuracyCard(d.accuracy || [], d.head.basis),
-    card("Matches", matches,
+    h("section", { class: "card" },
+      h("div", { class: "matches-head" }, h("h3", { text: "Matches" }), accuracyStrip(d.accuracy || [])),
+      matches,
       ratings.length ? h("p", { class: "note", text: `The columns on the far right show what each rating predicts for every match: the winner and predicted score, then ✓ or ✗ once it's played. ★ marks the rating in use (Settings).` }) : null),
   ];
 };
 
-/** How often each rating has called the winner at this event (played matches, ties left out). */
-function accuracyCard(rows, basis) {
-  if (!rows.length) return null;
-  const decided = Math.max(0, ...rows.map((r) => r.decided));
-  if (!decided) {
-    return card("Prediction accuracy", h("p", { class: "muted", text: "No matches with a winner yet. Accuracy appears here as results come in." }));
-  }
-  const cur = rows.find((r) => r.current) || rows[0];
-  const best = Math.max(...rows.map((r) => r.pct ?? -1));
-  return card("Prediction accuracy",
-    h("div", { class: "acc-head" },
-      h("b", { class: "acc-big", text: cur.pct == null ? "-" : `${cur.pct.toFixed(1)}%` }),
-      h("span", null, `of played matches called correctly by ${cur.rating} (${cur.correct} of ${cur.decided}), the rating in use.`)),
-    h("div", { class: "acc-rows" }, rows.map((r) => h("div", { class: "acc-row" + (r.current ? " current" : "") },
-      h("span", { class: "acc-name", text: r.rating + (r.current ? " ★" : "") }),
-      h("div", { class: "acc-bar" }, h("div", { style: { width: `${(r.pct || 0).toFixed(1)}%` } })),
-      h("span", { class: "acc-pct", text: r.pct == null ? "-" : `${r.pct.toFixed(1)}%` }),
-      h("span", { class: "muted small acc-count", text: `${r.correct}/${r.decided}` }),
-      h("span", { class: "note-badge " + (r.kind === "forecast" ? "shared" : "local"), title: r.kind === "forecast"
-        ? "Each match was predicted using only the matches before it." : "Built from this event's own results, so it already knew how these matches went.",
-        text: r.kind === "forecast" ? "Forecast" : "Hindsight" }),
-      r.pct === best && rows.filter((x) => x.pct === best).length === 1 ? h("span", { class: "note-badge plain", text: "Best" }) : null))),
-    h("p", { class: "note", text: "Forecast: each match was predicted using only the matches played before it, a fair test. " +
-      "Hindsight: CAP and OPR use this event's own results once FTCScout has them, so they partly \"know\" the answers and look better than they would in advance. " +
-      `With ${decided} matches, differences of a few percent can be luck.` }));
+/** Compact "called correctly" figures for each rating, shown beside the Matches heading. */
+function accuracyStrip(rows) {
+  const scored = rows.filter((r) => r.decided);
+  if (!scored.length) return null;
+  const tip = (r) => `${r.rating}: ${r.correct} of ${r.decided} played matches called correctly. ` + (r.kind === "forecast"
+    ? "Each match was predicted using only the matches before it."
+    : "Uses this event's own results (hindsight), so it looks better than a true forecast.");
+  return h("div", { class: "acc-strip", "aria-label": "Prediction accuracy" },
+    h("span", { class: "acc-lab", text: "Called correctly" }),
+    scored.map((r) => h("span", { class: "acc-chip" + (r.current ? " current" : "") + (r.kind === "forecast" ? "" : " hind"), title: tip(r) },
+      h("b", { text: r.rating + (r.current ? " ★" : "") }), ` ${r.pct.toFixed(0)}%`)));
 }
 
 RENDER.setup = async () => {
