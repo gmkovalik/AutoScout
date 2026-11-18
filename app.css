@@ -815,3 +815,57 @@ body:not(.app-ready) .site-footer { display: none; }
   .brand img { width: 28px; height: 28px; }
   .topactions { gap: 6px; }
 }
+
+/* ---------- Teams list: which teams have notes ---------- */
+.teams-filter { align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+td.notes-yes, span.notes-yes { font-weight: 700; color: #23683d; }
+td.notes-yes::before, span.notes-yes::before { content: "✎ "; font-weight: 400; }
+td.notes-no::after { content: "—"; color: #b7bcc6; }
+tr.t-noted td.sticky:first-child { box-shadow: inset 3px 0 0 #3fb36b; }
+span.notes-yes.legend { background: #e3f3e8; border-radius: 999px; padding: 1px 8px; }
+
+/* ---------- Team Page: pick list ---------- */
+.pick-add, .pick-sort { align-items: flex-end; }
+.pick-sort .field.wide { flex: 1 1 260px; max-width: 460px; }
+.pick-list { display: grid; gap: 10px; }
+.pick-card { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: start;
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fff; }
+.pick-card.best { border-color: #3fb36b; box-shadow: 0 0 0 2px rgba(63,179,107,.15); }
+.pick-rank { width: 32px; height: 32px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.pick-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 16px; }
+.pick-name { color: var(--muted); }
+.pick-predict { margin: 6px 0 4px; }
+.pick-predict .big { font-size: 15px; }
+.pick-predict .big b { font-size: 22px; color: var(--brand); margin-right: 4px; }
+.pick-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.pick-stats span { background: var(--row-alt); border-radius: 8px; padding: 3px 8px; display: flex; gap: 6px; align-items: baseline; font-size: 13.5px; }
+.pick-stats small { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+.pick-note { min-height: 44px; }
+.pick-actions { display: flex; flex-direction: column; gap: 6px; }
+.note-badge.issue { background: #f9dcdc; color: #8f1d1d; }
+.note-badge.plain { background: var(--row-alt); color: var(--text); font-weight: 500; }
+button.note-badge { border: 0; cursor: pointer; font-family: inherit; }
+@media (max-width: 600px) {
+  .pick-card { grid-template-columns: 30px minmax(0, 1fr); }
+  .pick-actions { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; }
+}
+
+/* ---------- Team Page: chat ---------- */
+.chat-log { height: min(60vh, 520px); overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  background: var(--row-alt); display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; }
+.chat-day { align-self: center; font-size: 12px; color: var(--muted); font-weight: 700; margin: 4px 0; }
+.chat-msg { align-self: flex-start; max-width: min(80%, 560px); background: #fff; border: 1px solid var(--border); border-radius: 12px 12px 12px 4px; padding: 7px 11px; }
+.chat-msg.own { align-self: flex-end; background: var(--brand-tint); border-color: #f1c3cf; border-radius: 12px 12px 4px 12px; }
+.chat-meta { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
+.chat-meta b { color: var(--brand); font-size: 13px; }
+.chat-text { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 2px; }
+.chat-empty { align-self: center; margin: auto; }
+.linkbtn.small-link { font-size: 12px; padding: 0; }
+.chat-compose { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.chat-compose .btn { min-height: 44px; }
+@media (max-width: 600px) {
+  .chat-compose { grid-template-columns: minmax(0, 1fr) auto; }
+  .chat-compose .chat-name { grid-column: 1 / -1; }
+  .chat-log { height: 55vh; }
+}

@@ -15,6 +15,8 @@ This is shared-workspace access control, not confidentiality. Do not put private
 - Team account credentials are stored at `teams/<team>/account.json`.
 - Match notes: `teams/<team>/match-notes.json`.
 - Team notes: `teams/<team>/team-notes.json`.
+- Team Page pick lists (one per event): `teams/<team>/picklist.json`.
+- Team Page chat (latest 400 messages): `teams/<team>/chat.json`.
 - Sessions: `teams/<team>/sessions/<session-id>.json`.
 - Photo metadata and base64 image content: `teams/<team>/photos/<photo-id>.json`.
 - Each file update uses the GitHub Contents API SHA and returns a conflict instead of silently overwriting a concurrent edit.
@@ -49,7 +51,7 @@ This is shared-workspace access control, not confidentiality. Do not put private
 - `PUT /api/team/:team/files/:path`: create/update an allowed JSON file. Send the last read ETag as `If-Match` to prevent stale writes.
 - `DELETE /api/team/:team/files/:path`: delete an allowed JSON file, optionally with `If-Match`.
 
-Allowed paths are `match-notes.json`, `team-notes.json`, `sessions/<id>.json`, and `photos/<id>.json`. Each file is limited to 700 KB to stay within the GitHub Contents API's practical limits. Store resized/compressed photo data in the photo JSON file.
+Allowed paths are `match-notes.json`, `team-notes.json`, `picklist.json`, `chat.json`, `sessions/<id>.json`, and `photos/<id>.json`. Each file is limited to 700 KB to stay within the GitHub Contents API's practical limits. Store resized/compressed photo data in the photo JSON file.
 
 ## How the website uses it
 
@@ -58,6 +60,8 @@ Allowed paths are `match-notes.json`, `team-notes.json`, `sessions/<id>.json`, a
 - **Match notes** carry an `event` field (`season/code`) so notes from different events with the same match label are kept apart. Notes shared before this field existed show at every event.
 - **Sessions:** "Save session to team" writes `sessions/<season>_<code>.json` and records it in `sessions/index.json`; "Open a team session" lists them from that index.
 - Saves read the file, apply the change and write it back with the file's ETag; if another device saved in between, the change is reapplied to the newer file (up to three tries).
+
+- **Team Page** (signed in): a shared **Pick List** for the loaded event, which can be ordered by any stat in the Teams table, by the predicted score and chance of winning with your team, or by how many scouting notes each team has, and a **Team Chat** that checks for new messages every 15 seconds while it is open.
 
 ## Deploying this version of the Worker
 
