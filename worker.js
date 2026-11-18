@@ -7,7 +7,7 @@ const PYODIDE_VERSION = "0.29.5";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const DATA_DIR = "/home/pyodide/.cache";      // AutoScout's cache dir lives under here
 const PYC_DIR = DATA_DIR + "/autoscout-pyc";  // compiled AutoScout.py, reused between visits
-const SOURCES = ["AutoScout.py", "py/tkstub.py", "py/webbridge.py"];
+const SOURCES = ["AutoScout.py", "py/tkstub.py", "py/xpr.py", "py/webbridge.py"];
 
 let py = null;
 let bridge = null;
