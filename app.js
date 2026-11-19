@@ -749,8 +749,9 @@ RENDER.overview = async () => {
   }
   return [
     h("div", { class: "overview-top" },
-      h("div", { class: "season-logo-wrap" },
-        h("img", { class: "season-logo", src: "assets/biobuzz.png", alt: "BioBuzz presented by RTX · FIRST Tech Challenge", width: 1200, height: 313 })),
+      h("div", { class: "season-logo-wrap" },        // black lettering for light mode, white for dark mode
+        h("img", { class: "season-logo logo-light", src: "assets/biobuzz.png", alt: "BioBuzz presented by RTX · FIRST Tech Challenge", width: 1200, height: 313 }),
+        h("img", { class: "season-logo logo-dark", src: "assets/biobuzz-dark.png", alt: "BioBuzz presented by RTX · FIRST Tech Challenge", width: 1200, height: 313 })),
       metrics),
     guide,
   ];
