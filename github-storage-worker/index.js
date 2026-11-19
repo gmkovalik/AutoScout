@@ -81,6 +81,48 @@ async function verifyToken(request, secret, team) {
   try { data = JSON.parse(decoder.decode(fromB64url(payload))); } catch { return false; }
   return data.team === team && Number(data.exp) > Date.now();
 }
+// ---- Admin -----------------------------------------------------------------
+// No Cloudflare settings needed: an admin is a normal AutoScout account whose name is
+// listed in admins.json at the top of the data repository, e.g. {"admins": ["12928"]}.
+// Only someone who can write to that repository (its owner) can make an account an admin.
+// The list is re-read on every admin request, so removing a name takes effect at once.
+async function tokenTeam(request, secret) {
+  const match = /^Bearer (.+)$/i.exec(request.headers.get("Authorization") || "");
+  if (!match) return null;
+  const [payload, signature] = match[1].split(".");
+  if (!payload || !signature) return null;
+  try {
+    if (!equal(await hmac("session:" + payload, secret), fromB64url(signature))) return null;
+    const data = JSON.parse(decoder.decode(fromB64url(payload)));
+    return Number(data.exp) > Date.now() && validTeam(String(data.team)) ? String(data.team) : null;
+  } catch { return null; }
+}
+async function adminList(env) {
+  const file = await getGithubFile(env, "admins.json");
+  if (!file) return [];
+  try {
+    const data = JSON.parse(file.text);
+    return (Array.isArray(data) ? data : data.admins || []).map(accountId).filter(validTeam);
+  } catch { return []; }
+}
+/** The signed-in account's name if it is an admin, else null. */
+async function adminTeam(request, env) {
+  const team = await tokenTeam(request, env.AUTH_PEPPER);
+  if (!team) return null;
+  return (await adminList(env)).includes(team) ? team : null;
+}
+async function listGithubDir(env, path) {
+  const response = await fetch(repoPath(env, path), { headers: githubHeaders(env) });
+  if (response.status === 404) return [];
+  if (!response.ok) throw await githubError("list", response);
+  const entries = await response.json();
+  return Array.isArray(entries) ? entries : [];
+}
+async function newPasswordRecord(password, pepper) {
+  const salt = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  return { algorithm: "PBKDF2-SHA256", iterations: PBKDF2_ITERATIONS, salt, verifier: await passwordVerifier(password, salt, pepper) };
+}
+
 // An account is an FTC team number (1-8 digits) or a username: 3-30 letters, digits,
 // "-" or "_", starting with a letter. Usernames are stored in lower case.
 function accountId(value) { return String(value || "").trim().toLowerCase(); }
@@ -142,7 +184,7 @@ async function deleteGithubFile(env, path, sha) {
   const response = await fetch(repoPath(env, path), {
     method: "DELETE",
     headers: githubHeaders(env),
-    body: JSON.stringify({ message: "Update AutoScout team data", sha }),
+    body: JSON.stringify({ message: "Remove AutoScout data " + path, sha }),
   });
   if (!response.ok) throw await githubError("delete", response);
 }
@@ -209,6 +251,7 @@ export default {
         const account = await getGithubFile(env, "teams/" + team + "/account.json");
         if (!account) return json({ error: "No account with that team number or username. Create one first." }, 404, headers);
         const record = JSON.parse(account.text);
+        if (record.disabled) return json({ error: "This account has been disabled by the AutoScout admin." }, 403, headers);
         const iterations = Number(record.password.iterations) || PBKDF2_ITERATIONS;
         if (iterations > PBKDF2_ITERATIONS) {
           return json({ error: "This team account was created with settings this server can't check. Ask the AutoScout administrator to delete teams/" + team + "/account.json in the data repository, then create the account again." }, 409, headers);
@@ -219,10 +262,101 @@ export default {
         }
         return json({ ok: true, token: await issueToken(team, env.AUTH_PEPPER), team }, 200, headers);
       }
+      if (url.pathname === "/api/admin/me" && request.method === "GET") {
+        const team = await tokenTeam(request, env.AUTH_PEPPER);
+        if (!team) return json({ error: "Sign in first." }, 401, headers);
+        const admins = await adminList(env);
+        return json({ team, admin: admins.includes(team), adminsConfigured: admins.length > 0 }, 200, headers);
+      }
+      if (url.pathname === "/api/admin/overview" && request.method === "GET") {
+        if (!await adminTeam(request, env)) return json({ error: "This account is not an admin." }, 403, headers);
+        const [dirs, admins, rate, commits] = await Promise.all([
+          listGithubDir(env, "teams"),
+          adminList(env),
+          fetch("https://api.github.com/rate_limit", { headers: githubHeaders(env) }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch("https://api.github.com/repos/" + env.DATA_REPO + "/commits?per_page=30", { headers: githubHeaders(env) })
+            .then(r => r.ok ? r.json() : []).catch(() => []),
+        ]);
+        const accounts = dirs.filter(x => x.type === "dir" && validTeam(x.name)).map(x => x.name)
+          .sort((a, b) => (/^\d+$/.test(a) && /^\d+$/.test(b)) ? Number(a) - Number(b) : a.localeCompare(b));
+        const core = rate && rate.resources && rate.resources.core;
+        return json({
+          accounts, admins,
+          rate: core ? { limit: core.limit, remaining: core.remaining, reset: core.reset * 1000 } : null,
+          activity: (Array.isArray(commits) ? commits : []).map(c => ({
+            sha: String(c.sha || "").slice(0, 7), message: c.commit && c.commit.message || "",
+            date: c.commit && c.commit.author && c.commit.author.date || "", url: c.html_url || "" })),
+          config: { dataRepo: env.DATA_REPO, allowedOrigin: env.ALLOWED_ORIGIN || "", setupCodeRequired: env.REQUIRE_SETUP_CODE === "true" },
+        }, 200, headers);
+      }
+      if (parts[0] === "api" && parts[1] === "admin" && parts[2] === "accounts") {
+        const me = await adminTeam(request, env);
+        if (!me) return json({ error: "This account is not an admin." }, 403, headers);
+        if (parts.length === 3 && request.method === "GET") {
+          const dirs = (await listGithubDir(env, "teams")).filter(x => x.type === "dir" && validTeam(x.name)).map(x => x.name);
+          dirs.sort((a, b) => (/^\d+$/.test(a) && /^\d+$/.test(b)) ? Number(a) - Number(b) : a.localeCompare(b));
+          return json({ accounts: dirs }, 200, headers);
+        }
+        const team = accountId(parts[3]);
+        if (!validTeam(team)) return json({ error: "Invalid team number or username." }, 400, headers);
+        const base = "teams/" + team;
+        if (parts.length === 4 && request.method === "GET") {
+          const account = await getGithubFile(env, base + "/account.json");
+          const top = await listGithubDir(env, base);
+          const files = [];
+          for (const e of top) {
+            if (e.type === "dir") for (const f of await listGithubDir(env, e.path)) files.push({ path: e.name + "/" + f.name, size: f.size });
+            else files.push({ path: e.name, size: e.size });
+          }
+          let info = {};
+          try { info = account ? JSON.parse(account.text) : {}; } catch { info = {}; }
+          return json({ team, exists: !!account, createdAt: info.createdAt || "", passwordChangedAt: info.passwordChangedAt || "",
+            disabled: !!info.disabled, admin: (await adminList(env)).includes(team), files }, 200, headers);
+        }
+        if (parts.length === 5 && parts[4] === "disable" && request.method === "POST") {
+          const body = await readJson(request);
+          if (team === me) return json({ error: "You can't disable your own account." }, 400, headers);
+          const account = await getGithubFile(env, base + "/account.json");
+          if (!account) return json({ error: "That account doesn't exist." }, 404, headers);
+          const record = JSON.parse(account.text);
+          record.disabled = !!body.disabled;
+          if (!record.disabled) delete record.disabled;
+          await putGithubFile(env, base + "/account.json", JSON.stringify(record, null, 2), account.sha,
+            (body.disabled ? "Disable" : "Enable") + " AutoScout account " + team);
+          return json({ ok: true, disabled: !!body.disabled }, 200, headers);
+        }
+        if (parts.length === 5 && parts[4] === "password" && request.method === "POST") {
+          const body = await readJson(request);
+          const password = String(body.password || "");
+          if (password.length < 12) return json({ error: "Use a password with at least 12 characters." }, 400, headers);
+          const account = await getGithubFile(env, base + "/account.json");
+          if (!account) return json({ error: "That account doesn't exist." }, 404, headers);
+          let record = {};
+          try { record = JSON.parse(account.text); } catch { record = { schema: 1, team }; }
+          record.password = await newPasswordRecord(password, env.AUTH_PEPPER);
+          record.passwordChangedAt = new Date().toISOString();
+          await putGithubFile(env, base + "/account.json", JSON.stringify(record, null, 2), account.sha, "Reset AutoScout account password " + team);
+          return json({ ok: true }, 200, headers);
+        }
+        if (parts.length === 4 && request.method === "DELETE") {
+          if ((await adminList(env)).includes(team)) return json({ error: "Remove this account from admins.json before deleting it." }, 400, headers);
+          // Delete every file of the account: sub-folders (sessions, photos) first, account.json last.
+          const top = await listGithubDir(env, base);
+          if (!top.length) return json({ error: "That account doesn't exist." }, 404, headers);
+          let removed = 0;
+          for (const e of top.filter(x => x.type === "dir")) {
+            for (const f of await listGithubDir(env, e.path)) { if (f.type === "file") { await deleteGithubFile(env, f.path, f.sha); removed++; } }
+          }
+          const files = top.filter(x => x.type === "file").sort((a, b) => (a.name === "account.json") - (b.name === "account.json"));
+          for (const f of files) { await deleteGithubFile(env, f.path, f.sha); removed++; }
+          return json({ ok: true, removed }, 200, headers);
+        }
+        return json({ error: "Not found." }, 404, headers);
+      }
       if (parts[0] === "api" && parts[1] === "team" && parts.length >= 3) {
         const team = parts[2];
         if (!validTeam(team)) return json({ error: "Invalid team number or username." }, 400, headers);
-        if (!await verifyToken(request, env.AUTH_PEPPER, team)) {
+        if (!await verifyToken(request, env.AUTH_PEPPER, team) && !await adminTeam(request, env)) {
           return json({ error: "Sign in to this team account first." }, 401, headers);
         }
         if (parts[3] === "files" && parts.length === 4 && request.method === "GET") {

@@ -4,7 +4,7 @@
    the download carries on in the background to refresh it for next time.
    The Python runtime (a fixed, versioned CDN URL) and fonts: cache first. */
 const CACHE = "autoscout-v1";      // same name: keeps the downloaded Python runtime
-const SHELL = ["./", "index.html", "app.css", "app.js", "worker.js", "AutoScout.py", "py/tkstub.py", "py/xpr.py", "py/webbridge.py",
+const SHELL = ["./", "index.html", "legal.html", "app.css", "app.js", "worker.js", "AutoScout.py", "py/tkstub.py", "py/xpr.py", "py/webbridge.py",
   "github-storage-worker/client.js",
   "manifest.webmanifest", "assets/logo-56.png", "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png", "assets/biobuzz.png", "assets/biobuzz-dark.png"];
 const NETWORK_WAIT_MS = 4000;     // how long to wait for the network before using the saved copy

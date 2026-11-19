@@ -180,6 +180,7 @@ const PAGES = [
 ];
 const PAGE = {};
 for (const [, items] of PAGES) for (const [id, title, icon, ctx] of items) PAGE[id] = { id, title, icon, ctx };
+PAGE.admin = { id: "admin", title: "Admin", icon: "", ctx: "Accounts and data tools for admins", hidden: true };
 
 // Icons: simple line drawings (24x24, 2px stroke) so they look the same on every computer.
 const ring = (x, y, r) => `M${x - r} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
@@ -637,7 +638,11 @@ function modal(build, { wide = false, onClose = null } = {}) {
   const wrap = h("div", { class: "modal", role: "dialog", "aria-modal": "true" });
   const dlg = h("div", { class: "dialog" + (wide ? " wide" : "") });
   const close = () => { wrap.remove(); document.removeEventListener("keydown", esc); if (onClose) onClose(); };
-  const esc = (e) => { if (e.key === "Escape") close(); };
+  const esc = (e) => {                         // Escape closes only the top-most pop-up
+    if (e.key !== "Escape") return;
+    const open_ = document.querySelectorAll(".modal");
+    if (open_[open_.length - 1] === wrap) { e.stopImmediatePropagation(); close(); }
+  };
   wrap.addEventListener("click", (e) => { if (e.target === wrap) close(); });
   document.addEventListener("keydown", esc);
   dlg.append(...[].concat(build(close)).filter(Boolean));
@@ -656,7 +661,7 @@ function confirmDialog(title, text, okText, onOk) {
     h("div", { class: "foot" }, btn("Cancel", close), btn(okText, () => { close(); onOk(); }, "primary"))]);
 }
 function quickSwitch() {
-  const all = Object.values(PAGE);
+  const all = Object.values(PAGE).filter((p) => !p.hidden);
   let idx = 0;
   modal((close) => {
     const list = h("div", { class: "switchlist" });
@@ -1931,6 +1936,212 @@ async function renderChat() {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Admin (#/admin, linked from the footer). An admin is a normal account listed in
+// admins.json in the data repository; nothing in Cloudflare needs changing.
+// ---------------------------------------------------------------------------
+const DATA_REPO = "gmkovalik/AutoScout-Data";
+const fmtBytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(2)} MB`;
+const fmtWhen = (iso) => { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); };
+
+RENDER.admin = async () => {
+  if (!teamReady()) return [card("Admin", h("p", { class: "muted", text: "Team accounts are not set up for this site." }))];
+  if (!teamOn()) {
+    return [card("Admin",
+      h("p", { text: "Sign in with your AutoScout account. Accounts listed as admins in the data repository get the admin tools here." }),
+      h("div", { class: "row" }, btn("Sign in", () => openSignIn(), "primary")))];
+  }
+  let me;
+  try { me = await Team.admin.me(); } catch (e) { return [card("Admin", h("p", { class: "status err", text: e.message }))]; }
+  if (!me.admin) return [adminSetupCard(me)];
+  let ov;
+  try { ov = await Team.admin.overview(); } catch (e) { return [card("Admin", h("p", { class: "status err", text: e.message }))]; }
+  const rate = ov.rate;
+  const ratePct = rate && rate.limit ? Math.round(100 * rate.remaining / rate.limit) : null;
+  const q = h("input", { type: "search", placeholder: "Find an account", value: S.adminQuery || "", autocomplete: "off" });
+  const list = h("div", { class: "admin-accounts" });
+  const drawList = () => {
+    const f = (S.adminQuery || "").trim().toLowerCase();
+    const rows = ov.accounts.filter((a) => !f || a.includes(f));
+    list.replaceChildren(...(rows.length ? rows.map((a) => h("button", { type: "button", class: "admin-account", onclick: () => openAdminAccount(a) },
+      h("b", { text: accountName(a) }), ov.admins.includes(a) ? h("span", { class: "note-badge plain", text: "Admin" }) : null)) :
+      [h("p", { class: "muted small", text: ov.accounts.length ? "No account matches." : "No accounts yet." })]));
+  };
+  q.addEventListener("input", () => { S.adminQuery = q.value; drawList(); });
+  drawList();
+  return [
+    h("p", { class: "muted admin-who" }, `Signed in as ${accountName(me.team)}, admin.`),
+    metricsRow([
+      { label: "ACCOUNTS", value: ov.accounts.length },
+      { label: "ADMINS", value: ov.admins.length },
+      { label: "GITHUB API LEFT", value: rate ? `${rate.remaining} / ${rate.limit}` : "unknown" },
+      { label: "API RESETS", value: rate ? new Date(rate.reset).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "-" },
+    ]),
+    ratePct != null && ratePct < 20 ? h("p", { class: "status err", text: `Only ${ratePct}% of the hourly GitHub allowance is left. Sign-ins, sharing and chat will pause if it runs out, until it resets.` }) : null,
+    h("div", { class: "grid-even admin-grid" },
+      card("Accounts", h("div", { class: "row" }, field("Search", q, "wide")), list),
+      card("Recent changes to the data",
+        ov.activity.length ? h("ol", { class: "admin-activity" }, ov.activity.map((c) => h("li", null,
+          h("span", { class: "muted small", text: fmtWhen(c.date) }),
+          c.url ? h("a", { href: c.url, target: "_blank", rel: "noopener", text: c.message.split("\n")[0] }) : h("span", { text: c.message })))) :
+          h("p", { class: "muted small", text: "No changes yet." }),
+        h("p", { class: "note" }, h("a", { href: `https://github.com/${ov.config.dataRepo || DATA_REPO}`, target: "_blank", rel: "noopener" }, "Open the data repository on GitHub")))),
+    card("Storage service",
+      h("div", { class: "admin-config" },
+        h("span", null, h("b", { text: "Data repository: " }), ov.config.dataRepo || "-"),
+        h("span", null, h("b", { text: "Website allowed: " }), ov.config.allowedOrigin || "-"),
+        h("span", null, h("b", { text: "Account creation: " }), ov.config.setupCodeRequired ? "needs a setup code" : "open to anyone"),
+        h("span", null, h("b", { text: "Admins: " }), ov.admins.map(accountName).join(", "))),
+      h("div", { class: "row" },
+        btn("Check the service", async (e) => {
+          const b = e.currentTarget; b.disabled = true;
+          const t = Date.now();
+          try {
+            const r = await fetch((window.AUTOSCOUT_TEAM_STORAGE || {}).url.replace(/\/$/, "") + "/health");
+            const d = await r.json();
+            toast(d.ok ? `Storage service is up (${Date.now() - t} ms).` : (d.error || "Storage service answered with an error."), !d.ok);
+          } catch (err) { toast("Couldn't reach the storage service: " + err.message, true); }
+          b.disabled = false;
+        }, "small"),
+        h("a", { class: "btn small", href: `https://github.com/${ov.config.dataRepo || DATA_REPO}/edit/main/admins.json`, target: "_blank", rel: "noopener" }, "Edit admins.json"))),
+  ];
+};
+
+/** Shown to a signed-in account that isn't an admin: how to make it one (on GitHub, not Cloudflare). */
+function adminSetupCard(me) {
+  const body = JSON.stringify({ admins: [me.team] }, null, 2);
+  const link = `https://github.com/${DATA_REPO}/new/main?filename=admins.json&value=${encodeURIComponent(body + "\n")}`;
+  return card("Admin",
+    h("p", { text: `${accountName(me.team)} isn't an admin.` }),
+    me.adminsConfigured
+      ? h("p", { class: "muted", text: "An existing admin can add this account to admins.json in the data repository." })
+      : [h("p", { text: "To make this account the admin, the owner of the data repository creates one file on GitHub (nothing changes in Cloudflare):" }),
+        h("pre", { class: "admin-json", text: body }),
+        h("div", { class: "row" }, h("a", { class: "btn primary", href: link, target: "_blank", rel: "noopener" }, "Create admins.json on GitHub"),
+          btn("I've done it, check again", () => rerender())),
+        h("p", { class: "note", text: "On GitHub, press Commit changes. Add more account names to the list later to add more admins." })]);
+}
+
+async function openAdminAccount(id) {
+  let d;
+  try { d = await Team.admin.account(id); } catch (e) { toast(e.message, true); return; }
+  modal((close) => {
+    const refresh = () => { close(); openAdminAccount(id); };
+    const total = d.files.reduce((n, f) => n + (f.size || 0), 0);
+    const files = d.files.filter((f) => f.path !== "account.json").sort((a, b) => a.path.localeCompare(b.path));
+    return [
+      h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
+      h("h2", { text: accountName(id) }),
+      h("div", { class: "admin-config" },
+        h("span", null, h("b", { text: "Created: " }), fmtWhen(d.createdAt) || "unknown"),
+        d.passwordChangedAt ? h("span", null, h("b", { text: "Password reset: " }), fmtWhen(d.passwordChangedAt)) : null,
+        h("span", null, h("b", { text: "Status: " }), d.disabled ? "Disabled (can't sign in)" : "Active", d.admin ? " · Admin" : ""),
+        h("span", null, h("b", { text: "Storage: " }), `${files.length} file${files.length === 1 ? "" : "s"}, ${fmtBytes(total)}`)),
+      h("div", { class: "row admin-actions" },
+        btn("Reset password", () => adminResetPassword(id), "small"),
+        d.admin ? null : btn(d.disabled ? "Enable account" : "Disable account", async (e) => {
+          const b = e.currentTarget; b.disabled = true;
+          try { await Team.admin.setDisabled(id, !d.disabled); toast(d.disabled ? "Account enabled." : "Account disabled. It can't sign in; any open sign-in ends within 12 hours."); refresh(); }
+          catch (err) { toast(err.message, true); b.disabled = false; }
+        }, "small"),
+        btn("Download backup", () => adminBackup(id, files), "small"),
+        d.admin ? null : btn("Delete account…", () => adminDeleteAccount(id, close), "small danger")),
+      files.length ? h("table", { class: "admin-files" }, h("tbody", null, files.map((f) => h("tr", null,
+        h("td", null, h("code", { text: f.path })), h("td", { class: "muted small", text: fmtBytes(f.size) }),
+        h("td", { class: "admin-file-actions" },
+          btn(f.path === "chat.json" ? "Moderate" : "View", () => adminViewFile(id, f.path), "small"),
+          btn("Delete", () => confirmDialog(`Delete ${f.path}?`, `This permanently removes it from ${accountName(id)}'s shared data.`, "Delete", async () => {
+            try { await Team.admin.deleteFile(id, f.path); toast("Deleted."); refresh(); } catch (err) { toast(err.message, true); }
+          }), "small danger")))))) : h("p", { class: "muted small", text: "No shared files." }),
+    ];
+  }, { wide: true });
+}
+
+async function adminViewFile(id, path) {
+  let f;
+  try { f = await Team.admin.getFile(id, path); } catch (e) { toast(e.message, true); return; }
+  if (path === "chat.json") return adminModerateChat(id, f);
+  const shown = JSON.stringify(f.data, (k, v) => (k === "data" && typeof v === "string" && v.startsWith("data:image/") ? `[photo, ${fmtBytes(v.length)}]` : v), 2);
+  modal((close) => [
+    h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
+    h("h2", { text: `${accountName(id)} · ${path}` }),
+    path.startsWith("photos/") && f.data && f.data.data ? h("img", { class: "note-photo", src: f.data.data, alt: "Shared photo" }) : null,
+    h("pre", { class: "admin-json", text: shown.length > 200000 ? shown.slice(0, 200000) + "\n…" : shown }),
+    h("div", { class: "foot" }, btn("Download", () => download(`${id}-${path.replace(/\//g, "_")}`, JSON.stringify(f.data, null, 2), "application/json")), btn("Close", close, "primary")),
+  ], { wide: true });
+}
+
+function adminModerateChat(id, file) {
+  const messages = (file.data && file.data.messages) || [];
+  modal((close) => [
+    h("button", { class: "btn small close", type: "button", onclick: close, "aria-label": "Close" }, "✕"),
+    h("h2", { text: `${accountName(id)} chat (${messages.length})` }),
+    messages.length ? h("div", { class: "admin-chat" }, messages.slice().reverse().map((m) => h("div", { class: "admin-chat-row" },
+      h("div", null, h("b", { text: m.name || "Someone" }), h("span", { class: "muted small", text: "  " + fmtWhen(m.at) }), h("div", { class: "chat-text", text: m.text })),
+      btn("Remove", async (e) => {
+        const b = e.currentTarget; b.disabled = true;
+        try {
+          const cur = await Team.admin.getFile(id, "chat.json");
+          const data = cur.data || { schema: 1, messages: [] };
+          data.messages = (data.messages || []).filter((x) => x.id !== m.id);
+          await Team.admin.putFile(id, "chat.json", data, cur.etag);
+          b.closest(".admin-chat-row").remove();
+          toast("Message removed.");
+        } catch (err) { toast(err.message, true); b.disabled = false; }
+      }, "small danger")))) : h("p", { class: "muted", text: "No messages." }),
+    h("div", { class: "foot" }, btn("Close", close, "primary")),
+  ], { wide: true });
+}
+
+function adminResetPassword(id) {
+  modal((close) => {
+    const pw = h("input", { type: "text", autocomplete: "off", placeholder: "At least 12 characters" });
+    const msg = h("p", { class: "status" });
+    const make = () => {
+      const words = ["robot", "gear", "honey", "field", "drive", "claw", "sensor", "pixel", "match", "score", "hive", "orbit"];
+      const pick = () => words[crypto.getRandomValues(new Uint32Array(1))[0] % words.length];
+      pw.value = `${pick()}-${pick()}-${pick()}-${crypto.getRandomValues(new Uint32Array(1))[0] % 1000}`;
+    };
+    make();
+    return [h("h2", { text: `New password for ${accountName(id)}` }),
+      h("p", { class: "muted small", text: "Everyone on that account uses the new password from now on. Tell them privately." }),
+      field("New password", pw), h("div", { class: "row" }, btn("Make another", make, "small")), msg,
+      h("div", { class: "foot" }, btn("Cancel", close), btn("Set password", async (e) => {
+        const b = e.currentTarget;
+        if (pw.value.length < 12) { msg.className = "status err"; msg.textContent = "Use at least 12 characters."; return; }
+        b.disabled = true;
+        try { await Team.admin.resetPassword(id, pw.value); close(); toast(`Password for ${accountName(id)} changed.`); }
+        catch (err) { msg.className = "status err"; msg.textContent = err.message; b.disabled = false; }
+      }, "primary"))];
+  });
+}
+
+function adminDeleteAccount(id, closeParent) {
+  modal((close) => {
+    const typed = h("input", { type: "text", autocomplete: "off", placeholder: id });
+    const go_ = btn("Delete everything", async (e) => {
+      const b = e.currentTarget;
+      if (typed.value.trim().toLowerCase() !== String(id)) { toast(`Type ${id} to confirm.`, true); return; }
+      b.disabled = true;
+      try { const r = await Team.admin.deleteAccount(id); close(); closeParent(); toast(`Deleted ${accountName(id)} (${r.removed} files).`); rerender(); }
+      catch (err) { toast(err.message, true); b.disabled = false; }
+    }, "primary");
+    return [h("h2", { text: `Delete ${accountName(id)}?` }),
+      h("p", { text: "This permanently removes the account and all of its shared notes, photos, chat, pick lists and sessions. Notes saved on people's own devices are not affected." }),
+      field(`Type ${id} to confirm`, typed),
+      h("div", { class: "foot" }, btn("Cancel", close), go_)];
+  });
+}
+
+async function adminBackup(id, files) {
+  toast(`Downloading ${files.length} files…`);
+  const out = { account: id, exported: new Date().toISOString(), files: {} };
+  for (const f of files) {
+    try { out.files[f.path] = (await Team.admin.getFile(id, f.path)).data; } catch (e) { out.files[f.path] = { error: e.message }; }
+  }
+  download(`autoscout-${id}-backup.json`, JSON.stringify(out, null, 2), "application/json");
+}
+
 // ---- Signing in ------------------------------------------------------------
 function openSignIn(mode = "signin") {
   if (!teamReady()) { toast("Team storage is not set up for this site.", true); return; }
@@ -2105,7 +2316,7 @@ if (Team) Team.onChange(() => {
   resetCloud();
   updateAccountButton();
   TP.pick = null; TP.chat = null; stopChatPolling();
-  if (S.boot && ["notes", "settings", "teampage", "teams"].includes(S.page)) rerender();
+  if (S.boot && ["notes", "settings", "teampage", "teams", "admin"].includes(S.page)) rerender();
 });
 
 function leagueInfoCard(info, teamNumber, onLoadEvent) {

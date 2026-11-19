@@ -63,6 +63,37 @@ Allowed paths are `match-notes.json`, `team-notes.json`, `picklist.json`, `chat.
 
 - **Team Page** (signed in): a shared **Pick List** for the loaded event, which can be ordered by any stat in the Teams table, by the predicted score and chance of winning with your team, or by how many scouting notes each team has, and a **Team Chat** that checks for new messages every 15 seconds while it is open.
 
+
+## Admin tools
+
+There is no admin password or Cloudflare setting. An admin is a normal AutoScout account whose name is listed in
+`admins.json` at the top of the data repository:
+
+```json
+{ "admins": ["12928"] }
+```
+
+Only someone who can write to the data repository can create or edit that file, so only its owner can make admins.
+The list is read again on every admin request, so removing a name takes effect immediately. The website's
+**Admin** page (footer link, `#/admin`) shows a one-click "Create admins.json on GitHub" link for a signed-in
+account that isn't an admin yet.
+
+Admin page tools:
+- **Overview:** number of accounts and admins, and how much of GitHub's hourly API allowance is left and when it resets.
+- **Recent changes:** the latest commits to the data repository.
+- **Storage service settings:** a check that the service is up.
+- **Each account:** created and password-reset dates, files and sizes; view, download or delete any shared file;
+  moderate the chat message by message; reset the password; disable or enable sign-in; download a JSON backup of all
+  its data; delete the account. Admin accounts can't be disabled or deleted until they are removed from `admins.json`.
+
+Admin API (all require a signed-in admin account's token):
+- `GET /api/admin/me` (any signed-in account): `{ team, admin, adminsConfigured }`
+- `GET /api/admin/overview`
+- `GET /api/admin/accounts/:account`, `DELETE /api/admin/accounts/:account`
+- `POST /api/admin/accounts/:account/password` `{ password }`
+- `POST /api/admin/accounts/:account/disable` `{ disabled }`
+- Admins can also use the `/api/team/:account/files/...` endpoints for any account.
+
 ## Deploying this version of the Worker
 
 The website works with the Worker that is already deployed. Redeploying `index.js` adds three improvements:

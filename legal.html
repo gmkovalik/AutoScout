@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Legal &amp; Privacy · FTC AutoScout</title>
+<meta name="theme-color" content="#5d081f">
+<meta name="color-scheme" content="light dark">
+<script>
+  (function () {
+    var t = "light";
+    try { t = localStorage.getItem("autoscout.theme") || "light"; } catch (e) {}
+    if (t === "system") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+  .legal { max-width: 760px; margin: 0 auto; padding: 18px 16px 48px; }
+  .legal h1 { font-size: 26px; margin: 14px 0 2px; }
+  .legal h2 { font-size: 17px; margin: 26px 0 6px; color: var(--brand-text); }
+  .legal p, .legal li { line-height: 1.6; }
+  .legal ul { padding-left: 20px; }
+  .legal li { margin-bottom: 8px; }
+  .legal .updated { color: var(--muted); margin: 0 0 8px; }
+  .legal .back { display: inline-block; margin-top: 4px; }
+  .legal .fine { color: var(--muted); font-size: 14px; margin-top: 28px; }
+</style>
+</head>
+<body class="app-ready">
+<header class="topbar">
+  <a class="brand" href="./#/overview" aria-label="FTC AutoScout home">
+    <img src="assets/logo-56.png" alt="" width="34" height="34">
+    <span class="wordmark"><span class="ftc">FTC</span> <span class="autoscout">AutoScout</span></span>
+  </a>
+</header>
+
+<main class="legal">
+  <a class="back" href="./#/overview">← Back to AutoScout</a>
+  <h1>Legal &amp; Privacy</h1>
+  <p class="updated">Last updated November 19, 2026</p>
+
+  <h2>Not affiliated with <i>FIRST</i></h2>
+  <p>AutoScout is an independent, non-commercial scouting tool built by LightSaders Robotics, FTC team 12928. It is not produced,
+    endorsed or sponsored by, or affiliated with, <i>FIRST</i>®. "<i>FIRST</i> Tech Challenge", "FTC" and related marks belong to their
+    respective owners. Season logos are shown to identify the current season.</p>
+
+  <h2>Where the data comes from</h2>
+  <p>Team, event and match data come from <a href="https://ftcscout.org" target="_blank" rel="noopener">FTCScout</a>, a community site
+    that collects it from the <a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener"><i>FIRST</i> Tech
+    Challenge Events API</a>. AutoScout downloads it when you load or refresh an event, and keeps a copy on your device so it works offline.</p>
+
+  <h2>Data accuracy</h2>
+  <p>CAP, OPR, EPA, XPR, the match predictions, win chances, projected standings, alliance tables and every other figure AutoScout
+    shows are calculated by AutoScout from that data. They are estimates for scouting and general interest, not official results, and
+    are not provided or checked by <i>FIRST</i> or FTCScout. Data can be late, incomplete or wrong, especially during a live event.
+    Check official <i>FIRST</i> sources before relying on a number for a competition decision.</p>
+
+  <h2>No warranty, use at your own risk</h2>
+  <p>AutoScout is provided "as is", without any warranty, including of accuracy, availability or fitness for a particular purpose.
+    LightSaders Robotics and AutoScout's contributors are not liable for any loss or consequence of using, or relying on, this site or
+    the data it shows.</p>
+
+  <h2>What is stored, and where</h2>
+  <ul>
+    <li><b>No ads, analytics or tracking.</b> AutoScout uses no analytics, advertising or tracking scripts.</li>
+    <li><b>On your device.</b> Loaded events, saved sessions, your scouting notes and photos, the FTCScout data cache and your settings
+      (such as dark mode) are kept in your browser's own storage. They stay on that device unless you download a session file or share
+      them with a team account.</li>
+    <li><b>Team accounts (optional).</b> If you create or sign in to a team account, the account name (a team number or username) and a
+      scrambled password check are stored, never the password itself. Anything you share with the account (notes, photos, chat
+      messages, pick lists and sessions) is stored in a <b>public</b> GitHub repository that anyone can read. Don't share personal or
+      private information there. Your sign-in is remembered on your device for up to 12 hours.</li>
+    <li><b>Admins.</b> AutoScout's administrators can view, edit or remove shared data and accounts, for moderation, account recovery and
+      removal requests.</li>
+    <li><b>Server logs.</b> The site is hosted by GitHub Pages, and team accounts run through a Cloudflare service. Like almost any website,
+      these may log standard request details (IP address, browser type, time) for security and troubleshooting. AutoScout does not use
+      them to build profiles, and does not sell or share them.</li>
+    <li><b>Other services the site loads from.</b> Opening AutoScout also contacts jsDelivr (to download the calculation engine),
+      Google Fonts (for the font) and FTCScout (for event data). Each sees a normal web request from your device.</li>
+  </ul>
+
+  <h2>Third-party links</h2>
+  <p>AutoScout links to FTCScout, <i>FIRST</i>'s own sites and GitHub. They run independently and have their own privacy practices,
+    which AutoScout doesn't control.</p>
+
+  <h2>Reporting an issue</h2>
+  <p>To report a problem, or to ask for shared data or an account to be corrected or removed, open an issue on
+    <a href="https://github.com/gmkovalik/AutoScout/issues" target="_blank" rel="noopener">AutoScout's GitHub page</a>, or contact
+    LightSaders Robotics through the <a href="https://sites.google.com/smca.com/autoscout/home" target="_blank" rel="noopener">AutoScout website</a>.
+    Removal requests should come from an official team contact.</p>
+
+  <h2>Changes to this page</h2>
+  <p>This page may change as AutoScout changes. The "Last updated" date above shows the latest version.</p>
+
+  <p class="fine">This page is a general summary of how AutoScout works, not legal advice, and its authors are not lawyers. For specific legal
+    questions about your own use of this site, consult a qualified professional.</p>
+</main>
+
+<footer class="site-footer">
+  <span>Ad Majorem Dei Gloriam © 2026 LightSaders Robotics</span>
+</footer>
+</body>
+</html>
