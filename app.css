@@ -998,7 +998,6 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
 .overview-top .metrics { margin-bottom: 0; }
 .season-logo-wrap { max-width: 640px; }
 .season-logo { width: 100%; height: auto; display: block; }
-:root[data-theme="dark"] .season-logo-wrap { background: #fff; border-radius: 12px; padding: 10px 14px; }
 .guide-title { font-size: 18px; margin: 0 0 10px; }
 .guide-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .guide-step { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--border); }
