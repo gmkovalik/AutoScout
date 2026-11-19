@@ -1019,3 +1019,27 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
   .guide-step { grid-template-columns: 30px minmax(0, 1fr); }
   .guide-step .btn { grid-column: 2; justify-self: start; }
 }
+
+/* ---------- footer: data credit and links ---------- */
+.site-footer .footer-legal { max-width: 900px; margin: 10px auto 0; font-size: 12px; font-weight: 400; line-height: 1.5; color: rgba(255,255,255,.75); letter-spacing: 0; }
+.site-footer a { color: #fff; }
+.footer-links { display: flex; justify-content: center; gap: 18px; margin-top: 8px; font-weight: 500; }
+
+/* ---------- Admin ---------- */
+.admin-who { margin: -4px 0 12px; }
+.admin-grid { margin-bottom: 14px; }
+.admin-accounts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 420px; overflow: auto; margin-top: 8px; }
+.admin-account { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 9px 11px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--card); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.admin-account:hover { border-color: var(--brand); }
+.admin-activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 420px; overflow: auto; font-size: 14px; }
+.admin-activity li { display: grid; gap: 1px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.admin-config { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 10px; font-size: 14px; }
+.admin-actions { margin-bottom: 12px; }
+.admin-files { width: 100%; border-collapse: collapse; font-size: 14px; }
+.admin-files td { padding: 6px 4px; border-top: 1px solid var(--border); }
+.admin-file-actions { text-align: right; white-space: nowrap; }
+.admin-file-actions .btn + .btn { margin-left: 6px; }
+.admin-json { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 var(--mono); background: var(--row-alt); padding: 12px; border-radius: 8px; max-height: 60vh; overflow: auto; }
+.admin-chat { display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
+.admin-chat-row { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }

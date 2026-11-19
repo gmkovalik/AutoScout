@@ -137,5 +137,19 @@
       }
     },
   };
+  // ---- Admin tools (only work for accounts listed in admins.json in the data repository)
+  const enc = (id) => encodeURIComponent(String(id));
+  const filesPath = (id, path) => "/api/team/" + enc(id) + "/files/" + String(path).split("/").map(encodeURIComponent).join("/");
+  api.admin = {
+    me: async () => (await request("/api/admin/me")).data,
+    overview: async () => (await request("/api/admin/overview")).data,
+    account: async (id) => (await request("/api/admin/accounts/" + enc(id))).data,
+    resetPassword: (id, password) => request("/api/admin/accounts/" + enc(id) + "/password", { method: "POST", body: JSON.stringify({ password }) }),
+    setDisabled: (id, disabled) => request("/api/admin/accounts/" + enc(id) + "/disable", { method: "POST", body: JSON.stringify({ disabled: !!disabled }) }),
+    deleteAccount: async (id) => (await request("/api/admin/accounts/" + enc(id), { method: "DELETE" })).data,
+    getFile: (id, path) => request(filesPath(id, path)),
+    putFile: (id, path, value, etag) => request(filesPath(id, path), { method: "PUT", headers: etag ? { "if-match": etag } : {}, body: JSON.stringify(value) }),
+    deleteFile: (id, path) => request(filesPath(id, path), { method: "DELETE" }),
+  };
   window.AutoScoutTeamStorage = api;
 })();
