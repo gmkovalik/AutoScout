@@ -994,9 +994,11 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
 
 /* ---------- Overview: season logo + guide ---------- */
 .pagehead { margin-bottom: 12px; }
-.overview-top { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: center; margin-bottom: 14px; }
+.overview-top { display: flex; flex-direction: column; gap: 16px; margin-bottom: 14px; }
 .overview-top .metrics { margin-bottom: 0; }
+.season-logo-wrap { max-width: 640px; }
 .season-logo { width: 100%; height: auto; display: block; }
+:root[data-theme="dark"] .season-logo-wrap { background: #fff; border-radius: 12px; padding: 10px 14px; }
 .guide-title { font-size: 18px; margin: 0 0 10px; }
 .guide-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .guide-step { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--border); }
@@ -1011,8 +1013,7 @@ body.page-busy #main { opacity: .6; transition: opacity .2s .2s; }
 .guide-step.done .guide-body b { color: var(--muted); }
 .event-line { margin: -4px 0 12px; color: var(--muted); }
 @media (max-width: 700px) {
-  .overview-top { grid-template-columns: minmax(0, 1fr); }
-  .season-logo { max-width: 260px; margin: 0 auto; }
+  .season-logo-wrap { max-width: 100%; }
   .guide-step { grid-template-columns: 30px minmax(0, 1fr); }
   .guide-step .btn { grid-column: 2; justify-self: start; }
 }
