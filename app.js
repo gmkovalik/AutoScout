@@ -165,7 +165,7 @@ const S = {
 };
 
 const PAGES = [
-  ["WORKSPACE", [["overview", "Start", "⌂", "Season logo, event numbers and the event guide"],
+  ["WORKSPACE", [["overview", "Home", "⌂", "Season logo, event numbers and the event guide"],
     ["competition", "Schedule Data", "\u2691\uFE0E", "Live schedule, match details and event statistics"],
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Look up any team: stats, notes, research and the event team list"],
