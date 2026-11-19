@@ -258,7 +258,7 @@ function go(page, params) {
 }
 
 let renderToken = 0;
-async function render() {
+async function render({ quiet = false } = {}) {
   const { page, params } = parseHash();
   const changed = page !== S.page;
   S.page = page;
@@ -268,7 +268,7 @@ async function render() {
   if (S.bootError) return;
   if (!S.boot && page !== "overview") paintPage(page, [engineWaitCard()]);   // the engine is still starting
   // If the new page takes a moment (the engine is busy), show a loading bar instead of looking stuck.
-  const busy = setTimeout(() => { if (token === renderToken) document.body.classList.add("page-busy"); }, 250);
+  const busy = quiet ? null : setTimeout(() => { if (token === renderToken) document.body.classList.add("page-busy"); }, 250);
   let nodes;
   try {
     nodes = await RENDER[page](params);
@@ -2479,11 +2479,20 @@ RENDER.matches = async (params) => {
 function setAuto(on) {
   S.auto.on = on;
   clearInterval(S.auto.timer);
+  S.auto.last = resultsStamp();
   if (on) S.auto.timer = setInterval(async () => {
     if (S.loading) return;
     const r = await runAction("refresh", {}, false);
-    if (r.ok) rerender();
+    // Redraw only when new results came in, and never under someone who is typing or has a pop-up open.
+    const now = resultsStamp();
+    if (r.ok && now !== S.auto.last) { S.auto.last = now; S.auto.pending = true; }
+    if (S.auto.pending && !userBusy()) { S.auto.pending = false; render({ quiet: true }); }
   }, S.auto.minutes * 60000);
+}
+function resultsStamp() { const hd = S.head || {}; return `${hd.played}/${hd.matches}/${hd.teams}`; }
+function userBusy() {
+  const el = document.activeElement;
+  return !!document.querySelector(".modal") || !!(el && (el.matches("input, textarea, select") || el.isContentEditable));
 }
 function resultDialog(label, vals, cols) {
   const get = (k) => vals[cols.indexOf(k)] ?? "";
