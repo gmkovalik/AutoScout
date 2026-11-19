@@ -165,7 +165,7 @@ const S = {
 };
 
 const PAGES = [
-  ["WORKSPACE", [["overview", "Overview", "⌂", "Competition command center"],
+  ["WORKSPACE", [["overview", "Start", "⌂", "Season logo, event numbers and the event guide"],
     ["competition", "Schedule Data", "\u2691\uFE0E", "Live schedule, match details and event statistics"],
     ["setup", "Setup", "◈", "Event and session setup"],
     ["teams", "Teams", "▦", "Look up any team: stats, notes, research and the event team list"],
@@ -749,7 +749,8 @@ RENDER.overview = async () => {
   }
   return [
     h("div", { class: "overview-top" },
-      h("img", { class: "season-logo", src: "assets/biobuzz.png", alt: "BioBuzz", width: 400, height: 285 }),
+      h("div", { class: "season-logo-wrap" },
+        h("img", { class: "season-logo", src: "assets/biobuzz.png", alt: "BioBuzz presented by RTX · FIRST Tech Challenge", width: 1200, height: 313 })),
       metrics),
     guide,
   ];
